@@ -39,11 +39,11 @@ int main(int argc, const char **argv) {
     cl_mem b3 = clCreateBuffer(context, CL_MEM_READ_WRITE, 64, nullptr, &err);
     size_t arg_sizes[3] = { sizeof(cl_mem), sizeof(cl_mem), sizeof(cl_mem) };
     void* arg_values[3] = {&b1, &b2, &b3};
-    try {
+    //try {
         azer.analyze("vecadd", 1, &global_size, &local_size, 3, arg_sizes, arg_values);
-    } catch (z3::exception& ex) {
-        std::cerr << ex.what() << std::endl;
-    }
+    //} catch (z3::exception& ex) {
+    //    std::cerr << "z3::exception: " << ex.what() << std::endl;
+    //}
     /*auto ExpectedParser = CommonOptionsParser::create(argc, argv, MyToolCategory);
     auto ast = clang::tooling::buildASTFromCode("__kernel void vecadd(__global int* a, __global int* b, __global int* c) {\n"
                                                 "    const int idx = get_global_id(0);\n"

@@ -8,17 +8,17 @@ class restrict_checker : public abstract_checker {
 public:
     explicit restrict_checker(analyzer_context& ctx);
 
-    void check_memory_access(const scope* scope, const clang::Expr* expr, memory_access_type access_type, const z3::expr& address) override;
+    void check_memory_access(const block* block, const clang::Expr* expr, memory_access_type access_type, const z3::expr& address) override;
 private:
-    std::unordered_set<const scope*> accessed_scopes;
-    std::unordered_set<const scope*> restrict_written_scopes;
+    std::unordered_set<const block*> accessed_blocks;
+    std::unordered_set<const block*> restrict_written_blocks;
 
-    std::unordered_map<const scope*, std::unordered_set<const var*>> restrict_writes;
+    std::unordered_map<const block*, std::unordered_set<const var*>> restrict_writes;
 
-    [[nodiscard]] z3::expr read_accesses(const scope* scope, const z3::expr& address);
-    void write_access(const scope* scope, const z3::expr& address, const var* var);
-    [[nodiscard]] z3::expr read_restrict_writes(const scope* scope, const z3::expr& address);
-    void write_restrict_write(const scope* scope, const z3::expr& address, const var* var);
+    [[nodiscard]] z3::expr read_accesses(const block* block, const z3::expr& address);
+    void write_access(const block* block, const z3::expr& address, const var* var);
+    [[nodiscard]] z3::expr read_restrict_writes(const block* block, const z3::expr& address);
+    void write_restrict_write(const block* block, const z3::expr& address, const var* var);
 };
 
 

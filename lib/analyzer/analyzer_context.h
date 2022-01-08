@@ -2,7 +2,7 @@
 #define OPENCL_RESTRICT_ANALYZER_ANALYZER_CONTEXT_H
 
 #include "analyzer_parameters.h"
-#include "model/scope.h"
+#include "model/block.h"
 #include "model/memory.h"
 
 #include <clang/AST/ASTContext.h>
@@ -17,7 +17,7 @@ public:
     z3::context z3_ctx;
     z3::solver solver;
     memory mem;
-    scope_context scope_ctx;
+    block_context block_ctx;
 };
 
 #endif //OPENCL_RESTRICT_ANALYZER_ANALYZER_CONTEXT_H

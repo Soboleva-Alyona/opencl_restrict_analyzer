@@ -1,7 +1,7 @@
 #include "abstract_checker.h"
 
 abstract_checker::abstract_checker(analyzer_context& ctx)
-: z3_ctx(ctx.z3_ctx), scope_ctx(ctx.scope_ctx), ctx(ctx), assumptions(z3_ctx) { }
+: z3_ctx(ctx.z3_ctx), block_ctx(ctx.block_ctx), ctx(ctx), assumptions(z3_ctx) { }
 
 void abstract_checker::write_meta(std::string_view meta, const z3::expr& address, const z3::expr& value) {
     ctx.mem.write_meta(meta, address, value);

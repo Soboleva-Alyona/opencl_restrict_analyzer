@@ -8,7 +8,7 @@
 #include <OpenCL/cl.h>
 
 /*ast_visitor::ast_visitor(clang::ASTContext& ctx, const analyzer_parameters& parameters)
-: ast_ctx(ctx), solver(z3_ctx), mem(solver), scope_ctx(ctx, z3_ctx, mem), parameters(parameters),
+: ast_ctx(ctx), solver(z3_ctx), mem(solver), block_ctx(ctx, z3_ctx, mem), parameters(parameters),
 ctx(analyzer_context{ parameters, ast_ctx, z3_ctx, mem,   } ) { }*/
 
 ast_visitor::ast_visitor(analyzer_context& ctx) : ctx(ctx) {
@@ -43,8 +43,8 @@ bool ast_visitor::VisitFunctionDecl(clang::FunctionDecl* f) {
     if (!f->hasAttr<clang::OpenCLKernelAttr>() || !f->hasBody() || f->getName() != ctx.parameters.kernel_name) {
         return true;
     }
-    scope* global_scope = ctx.scope_ctx.make_scope();
-    scope* kernel_scope = global_scope->make_inner();
+    block* global_block = ctx.block_ctx.make_block();
+    block* kernel_block = global_block->make_inner();
     for (uint32_t i = 0; i < ctx.parameters.work_dim; ++i) {
         const z3::expr global_id =
                 ctx.mem.read_meta(META_GLOBAL_ID, ctx.z3_ctx.int_val(i), ctx.z3_ctx.int_sort());
@@ -54,8 +54,9 @@ bool ast_visitor::VisitFunctionDecl(clang::FunctionDecl* f) {
         const auto& [size, data] = ctx.parameters.args[i];
         const clang::ParmVarDecl* decl = f->getParamDecl(i);
         const clang::QualType& type = decl->getType();
-        const var* var = kernel_scope->decl_var(decl);
+        const var* var = kernel_block->decl_var(decl);
         if (type->isPointerType() && size == sizeof(cl_mem)) {
+            ctx.solver.add(var->to_z3_expr() == z3::const_array(ctx.z3_ctx.int_sort(), ctx.z3_ctx.int_val(0)));
             const auto element_size = ctx.ast_ctx.getTypeSizeInChars(type->getPointeeType()).getQuantity();
             size_t mem_size;
             cl_int err = clGetMemObjectInfo(*reinterpret_cast<cl_mem*>(data), CL_MEM_SIZE, sizeof(mem_size), &mem_size, nullptr);
@@ -70,7 +71,7 @@ bool ast_visitor::VisitFunctionDecl(clang::FunctionDecl* f) {
             }
         }
     }
-    transformStmt(kernel_scope, f->getBody());
+    transformStmt(kernel_block, f->getBody());
     for (const auto& assertion : ctx.solver.assertions()) {
         std::cout << assertion.to_string() << std::endl;
     }
@@ -83,43 +84,43 @@ bool ast_visitor::VisitFunctionDecl(clang::FunctionDecl* f) {
     return false;
 }
 
-void ast_visitor::transformStmt(scope* scope, clang::Stmt* stmt) {
+void ast_visitor::transformStmt(block* block, clang::Stmt* stmt) {
     std::cout << stmt->getStmtClassName() << std::endl;
     if (clang::isa<clang::CompoundStmt>(stmt)) {
-        transformCompoundStmt(scope, clang::cast<clang::CompoundStmt>(stmt));
+        transformCompoundStmt(block, clang::cast<clang::CompoundStmt>(stmt));
     } else if (clang::isa<clang::DeclStmt>(stmt)) {
-        processDeclStmt(scope, clang::cast<clang::DeclStmt>(stmt));
+        processDeclStmt(block, clang::cast<clang::DeclStmt>(stmt));
     } else if (clang::isa<clang::ValueStmt>(stmt)) {
-        transformValueStmt(scope, clang::cast<clang::ValueStmt>(stmt));
+        transformValueStmt(block, clang::cast<clang::ValueStmt>(stmt));
     }
 }
 
-void ast_visitor::transformCompoundStmt(scope* scope, clang::CompoundStmt* compound_stmt) {
+void ast_visitor::transformCompoundStmt(block* block, clang::CompoundStmt* compound_stmt) {
     std::for_each(compound_stmt->body_begin(), compound_stmt->body_end(), [&](clang::Stmt* stmt) {
-        transformStmt(scope, stmt);
+        transformStmt(block, stmt);
     });
 }
 
-void ast_visitor::processDeclStmt(scope* scope, clang::DeclStmt* decl_stmt) {
+void ast_visitor::processDeclStmt(block* block, clang::DeclStmt* decl_stmt) {
     std::for_each(decl_stmt->decl_begin(), decl_stmt->decl_end(), [&](clang::Decl* decl) {
-        processDecl(scope, decl);
+        processDecl(block, decl);
     });
 }
 
-void ast_visitor::processDecl(scope* scope, clang::Decl* decl) {
+void ast_visitor::processDecl(block* block, clang::Decl* decl) {
     switch (decl->getKind()) {
         case clang::Decl::Var:
-            processVarDecl(scope, clang::cast<clang::VarDecl>(decl));
+            processVarDecl(block, clang::cast<clang::VarDecl>(decl));
             break;
         default:
             break;
     }
 }
 
-void ast_visitor::processVarDecl(scope* scope, clang::VarDecl* var_decl) {
-    const var* var = scope->decl_var(var_decl);
+void ast_visitor::processVarDecl(block* block, clang::VarDecl* var_decl) {
+    const var* var = block->decl_var(var_decl);
     if (var_decl->getAnyInitializer()) {
-        const std::optional<z3::expr> initializer = transformExpr(scope, var_decl->getAnyInitializer());
+        const std::optional<z3::expr> initializer = transformExpr(block, var_decl->getAnyInitializer());
         if (initializer.has_value()) {
             const z3::expr address = ctx.z3_ctx.int_val(var->address);
             ctx.mem.write(address, ctx.mem.read(initializer.value(), ctx.z3_ctx.int_sort()));
@@ -133,30 +134,30 @@ void ast_visitor::processVarDecl(scope* scope, clang::VarDecl* var_decl) {
     }
 }
 
-std::optional<z3::expr> ast_visitor::transformValueStmt(scope* scope, const clang::ValueStmt* value_stmt) {
+std::optional<z3::expr> ast_visitor::transformValueStmt(block* block, const clang::ValueStmt* value_stmt) {
     if (clang::isa<clang::Expr>(value_stmt)) {
-        return transformExpr(scope, clang::cast<clang::Expr>(value_stmt));
+        return transformExpr(block, clang::cast<clang::Expr>(value_stmt));
     } else {
         std::cout << "WARN: unknown value stmt type: " << value_stmt->getStmtClassName() << std::endl;
         return std::nullopt;
     }
 }
 
-std::optional<z3::expr> ast_visitor::transformExpr(scope* scope, const clang::Expr* expr) {
+std::optional<z3::expr> ast_visitor::transformExpr(block* block, const clang::Expr* expr) {
     if (clang::isa<clang::ArraySubscriptExpr>(expr)) {
-        return transformArraySubscriptExpr(scope, clang::cast<clang::ArraySubscriptExpr>(expr));
+        return transformArraySubscriptExpr(block, clang::cast<clang::ArraySubscriptExpr>(expr));
     } else if (clang::isa<clang::BinaryOperator>(expr)) {
-        return transformBinaryOperator(scope, clang::cast<clang::BinaryOperator>(expr));
+        return transformBinaryOperator(block, clang::cast<clang::BinaryOperator>(expr));
     } else if (clang::isa<clang::UnaryOperator>(expr)) {
-        return transformUnaryOperator(scope, clang::cast<clang::UnaryOperator>(expr));
+        return transformUnaryOperator(block, clang::cast<clang::UnaryOperator>(expr));
     } else if (clang::isa<clang::CallExpr>(expr)) {
-        return transformCallExpr(scope, clang::cast<clang::CallExpr>(expr));
+        return transformCallExpr(block, clang::cast<clang::CallExpr>(expr));
     } else if (clang::isa<clang::DeclRefExpr>(expr)) {
-        return transformDeclRefExpr(scope, clang::cast<clang::DeclRefExpr>(expr));
+        return transformDeclRefExpr(block, clang::cast<clang::DeclRefExpr>(expr));
     } else if (clang::isa<clang::ImplicitCastExpr>(expr)) {
-        return transformImplicitCastExpr(scope, clang::cast<clang::ImplicitCastExpr>(expr));
+        return transformImplicitCastExpr(block, clang::cast<clang::ImplicitCastExpr>(expr));
     } else if (clang::isa<clang::ParenExpr>(expr)) {
-        return transformParenExpr(scope, clang::cast<clang::ParenExpr>(expr));
+        return transformParenExpr(block, clang::cast<clang::ParenExpr>(expr));
     } else if (clang::isa<clang::IntegerLiteral>(expr)) {
         const z3::expr address = ctx.z3_ctx.int_val(ctx.mem.allocate(1));
         ctx.mem.write(address, ctx.z3_ctx.int_val(clang::cast<clang::IntegerLiteral>(expr)->getValue().getLimitedValue()));
@@ -167,9 +168,9 @@ std::optional<z3::expr> ast_visitor::transformExpr(scope* scope, const clang::Ex
     }
 }
 
-std::optional<z3::expr> ast_visitor::transformArraySubscriptExpr(scope* scope, const clang::ArraySubscriptExpr *array_subscript_expr) {
-    std::optional<z3::expr> lhs = transformExpr(scope, array_subscript_expr->getBase());
-    std::optional<z3::expr> rhs = transformExpr(scope, array_subscript_expr->getIdx());
+std::optional<z3::expr> ast_visitor::transformArraySubscriptExpr(block* block, const clang::ArraySubscriptExpr *array_subscript_expr) {
+    std::optional<z3::expr> lhs = transformExpr(block, array_subscript_expr->getBase());
+    std::optional<z3::expr> rhs = transformExpr(block, array_subscript_expr->getIdx());
     if (!lhs.has_value() || !rhs.has_value() || !lhs->get_sort().is_int()) {
         return std::nullopt;
     }
@@ -188,36 +189,43 @@ std::optional<z3::expr> ast_visitor::transformArraySubscriptExpr(scope* scope, c
     return ctx.mem.read(result, ctx.z3_ctx.int_sort());
 }
 
-std::optional<z3::expr> ast_visitor::transformBinaryOperator(scope* scope, const clang::BinaryOperator* binary_operator) {
+std::optional<z3::expr> ast_visitor::transformBinaryOperator(block* block, const clang::BinaryOperator* binary_operator) {
     switch (binary_operator->getOpcode()) {
         case clang::BO_Assign: {
-            std::optional<z3::expr> lhs = transformExpr(scope, binary_operator->getLHS());
-            std::optional<z3::expr> rhs = transformExpr(scope, binary_operator->getRHS());
-            if (lhs.has_value() && rhs.has_value()) {
+            //std::optional<z3::expr> lhs = transformExpr(block, binary_operator->getLHS());
+            std::optional<z3::expr> rhs = transformExpr(block, binary_operator->getRHS());
+            //if (lhs.has_value() && rhs.has_value()) {
                 //checker.check_memory_access(checker.READ, rhs.value());
                 //checker.check_memory_access(checker.WRITE, lhs.value());
-                write(scope, binary_operator->getLHS(), lhs.value(), read(scope, binary_operator->getRHS(), rhs.value()));
-                ctx.mem.write_meta(META_BASE, lhs.value(), ctx.mem.read_meta(META_BASE, rhs.value(), ctx.z3_ctx.int_sort()));
-                ctx.mem.write_meta(META_SIZE, lhs.value(), ctx.mem.read_meta(META_SIZE, rhs.value(), ctx.z3_ctx.int_sort()));
+                //write(block, binary_operator->getLHS(), lhs.value(), read(block, binary_operator->getRHS(), rhs.value()));
+                //ctx.mem.write_meta(META_BASE, lhs.value(), ctx.mem.read_meta(META_BASE, rhs.value(), ctx.z3_ctx.int_sort()));
+                //ctx.mem.write_meta(META_SIZE, lhs.value(), ctx.mem.read_meta(META_SIZE, rhs.value(), ctx.z3_ctx.int_sort()));
                 //solver.add(lhs.value() == rhs.value());
+            //}
+            if (!rhs.has_value()) {
+                return std::nullopt;
             }
-            return lhs;
+            assign(block, binary_operator->getLHS(), rhs.value());
+            return rhs.value();
+            //return lhs;
         } case clang::BO_Add: {
-            std::optional<z3::expr> lhs = transformExpr(scope, binary_operator->getLHS());
-            std::optional<z3::expr> rhs = transformExpr(scope, binary_operator->getRHS());
+            std::optional<z3::expr> lhs = transformExpr(block, binary_operator->getLHS());
+            std::optional<z3::expr> rhs = transformExpr(block, binary_operator->getRHS());
             if (!lhs.has_value() || !rhs.has_value()) {
                 return std::nullopt;
             }
-            return push(read(scope, binary_operator->getLHS(), lhs.value()) + read(scope, binary_operator->getRHS(), rhs.value()));
+            return lhs.value() + rhs.value();
+            //return push(read(block, binary_operator->getLHS(), lhs.value()) + read(block, binary_operator->getRHS(), rhs.value()));
         }  case clang::BO_Sub: {
-            std::optional<z3::expr> lhs = transformExpr(scope, binary_operator->getLHS());
-            std::optional<z3::expr> rhs = transformExpr(scope, binary_operator->getRHS());
+            std::optional<z3::expr> lhs = transformExpr(block, binary_operator->getLHS());
+            std::optional<z3::expr> rhs = transformExpr(block, binary_operator->getRHS());
             if (!lhs.has_value() || !rhs.has_value()) {
                 return std::nullopt;
             }
-            const z3::expr result = ctx.z3_ctx.int_val(ctx.mem.allocate(1));
-            ctx.mem.write(result, ctx.mem.read(lhs.value(), ctx.z3_ctx.int_sort()) - ctx.mem.read(rhs.value(), ctx.z3_ctx.int_sort()));
-            return result;
+            return lhs.value() - rhs.value();
+            //const z3::expr result = ctx.z3_ctx.int_val(ctx.mem.allocate(1));
+            //ctx.mem.write(result, ctx.mem.read(lhs.value(), ctx.z3_ctx.int_sort()) - ctx.mem.read(rhs.value(), ctx.z3_ctx.int_sort()));
+            //return result;
         } default: {
             std::cout << "WARN: unknown BO opcode: " << binary_operator->getOpcodeStr().str() << std::endl;
             return std::nullopt;
@@ -226,10 +234,10 @@ std::optional<z3::expr> ast_visitor::transformBinaryOperator(scope* scope, const
 }
 
 
-std::optional<z3::expr> ast_visitor::transformUnaryOperator(scope* scope, const clang::UnaryOperator* unary_operator) {
+std::optional<z3::expr> ast_visitor::transformUnaryOperator(block* block, const clang::UnaryOperator* unary_operator) {
     switch (unary_operator->getOpcode()) {
         case clang::UO_AddrOf: {
-            std::optional<z3::expr> sub_expr = transformExpr(scope, unary_operator->getSubExpr());
+            std::optional<z3::expr> sub_expr = transformExpr(block, unary_operator->getSubExpr());
             if (!sub_expr.has_value()) {
                 return std::nullopt;
             }
@@ -242,10 +250,10 @@ std::optional<z3::expr> ast_visitor::transformUnaryOperator(scope* scope, const 
             std::cout << "restrict deref: " << unary_operator->getType().isRestrictQualified() << std::endl;
             std::cout << "subexpr type: " << unary_operator->getSubExpr()->getType().getAsString() << std::endl;
             std::cout << "restrict subexpr: " << unary_operator->getSubExpr()->getType().isRestrictQualified() << std::endl;
-            std::optional<z3::expr> sub_expr = transformExpr(scope, unary_operator->getSubExpr());
+            std::optional<z3::expr> sub_expr = transformExpr(block, unary_operator->getSubExpr());
             return sub_expr.has_value() ? std::make_optional(ctx.mem.read(sub_expr.value(), ctx.z3_ctx.int_sort())) : std::nullopt;
             //return sub_expr.has_value() ? std::make_optional(mem_read(z3_ctx, mem_read(z3_ctx, sub_expr.value()))) : std::nullopt;
-            //return sub_expr.has_value() ? std::make_optional(scope.deref(sub_expr.value())) : std::nullopt;
+            //return sub_expr.has_value() ? std::make_optional(block.deref(sub_expr.value())) : std::nullopt;
         } default: {
             std::cout << "WARN: unknown UO opcode: " << unary_operator->getOpcode() << std::endl;
             return std::nullopt;
@@ -258,6 +266,8 @@ std::unordered_map<std::string, std::function<std::optional<z3::expr>(analyzer_c
             if (arguments.size() != 1 || !arguments[0].has_value()) {
                 return std::nullopt;
             }
+            return ctx.z3_ctx.int_val(0);
+
             const z3::expr idx = ctx.mem.read(arguments[0].value(), ctx.z3_ctx.int_sort());
             //const z3::expr address = ctx.z3_ctx.int_val(ctx.mem.allocate(1));
             const z3::expr result = ctx.mem.read_meta(META_GLOBAL_ID, idx, ctx.z3_ctx.int_sort());
@@ -272,13 +282,13 @@ std::unordered_map<std::string, std::function<std::optional<z3::expr>(analyzer_c
         }}
 };
 
-std::optional<z3::expr> ast_visitor::transformCallExpr(scope* scope2, const clang::CallExpr* call_expr) {
+std::optional<z3::expr> ast_visitor::transformCallExpr(block* block2, const clang::CallExpr* call_expr) {
     const clang::Decl* callee_decl = call_expr->getCalleeDecl();
     std::vector<std::optional<z3::expr>> args;
     std::transform(call_expr->getArgs(), call_expr->getArgs() + call_expr->getNumArgs(), std::inserter(args, args.begin()), [&](const clang::Expr* expr) {
-        return transformExpr(scope2, expr);
+        return transformExpr(block2, expr);
     });
-    //const var* container = scope2.decl_var("return@" + std::to_string(callee_decl->getID()), call_expr->getType());
+    //const var* container = block2.decl_var("return@" + std::to_string(callee_decl->getID()), call_expr->getType());
     const z3::expr return_address = ctx.z3_ctx.int_val(ctx.mem.allocate(1));
     if (clang::isa<clang::NamedDecl>(callee_decl)) {
         const auto name = clang::cast<clang::NamedDecl>(callee_decl)->getName().str();
@@ -293,23 +303,24 @@ std::optional<z3::expr> ast_visitor::transformCallExpr(scope* scope2, const clan
         }
     }
     if (callee_decl->hasBody()) {
-        transformStmt(scope2, callee_decl->getBody());
+        transformStmt(block2, callee_decl->getBody());
     }
     return std::optional<z3::expr>();
 }
 
-std::optional<z3::expr> ast_visitor::transformDeclRefExpr(scope* scope, const clang::DeclRefExpr* decl_ref_expr) {
-    const var* var = scope->get_var(decl_ref_expr->getDecl());
-    return var ? std::make_optional(ctx.z3_ctx.int_val(var->address)) : std::nullopt;
+std::optional<z3::expr> ast_visitor::transformDeclRefExpr(block* block, const clang::DeclRefExpr* decl_ref_expr) {
+    const var* var = block->get_var(decl_ref_expr->getDecl());
+    return var ? std::make_optional(var->to_z3_expr()) : std::nullopt;
+    //return var ? std::make_optional(ctx.z3_ctx.int_val(var->address)) : std::nullopt;
     //return var ? std::make_optional(var->to_z3_expr(z3_ctx)) : std::nullopt;
 };
 
-std::optional<z3::expr> ast_visitor::transformImplicitCastExpr(scope* scope, const clang::ImplicitCastExpr *implicit_cast_expr) {
-    return transformExpr(scope, implicit_cast_expr->getSubExpr());
+std::optional<z3::expr> ast_visitor::transformImplicitCastExpr(block* block, const clang::ImplicitCastExpr *implicit_cast_expr) {
+    return transformExpr(block, implicit_cast_expr->getSubExpr());
 }
 
-std::optional<z3::expr> ast_visitor::transformParenExpr(scope* scope, const clang::ParenExpr *paren_expr) {
-    return transformExpr(scope, paren_expr->getSubExpr());
+std::optional<z3::expr> ast_visitor::transformParenExpr(block* block, const clang::ParenExpr *paren_expr) {
+    return transformExpr(block, paren_expr->getSubExpr());
 }
 
 namespace {
@@ -326,16 +337,16 @@ namespace {
     }
 }
 
-z3::expr ast_visitor::read(const scope* scope, const clang::Expr* expr, const z3::expr& address) {
+z3::expr ast_visitor::read(const block* block, const clang::Expr* expr, const z3::expr& address) {
     for (auto& checker : checkers) {
-        checker->check_memory_access(scope, expr, abstract_checker::READ, address);
+        checker->check_memory_access(block, expr, abstract_checker::READ, address);
     }
     return ctx.mem.read(address, type_to_sort(ctx.z3_ctx, expr->getType()));
 }
 
-void ast_visitor::write(const scope* scope, const clang::Expr* expr, const z3::expr& address, const z3::expr& value) {
+void ast_visitor::write(const block* block, const clang::Expr* expr, const z3::expr& address, const z3::expr& value) {
     for (auto& checker : checkers) {
-        checker->check_memory_access(scope, expr, abstract_checker::WRITE, address);
+        checker->check_memory_access(block, expr, abstract_checker::WRITE, address);
     }
     ctx.mem.write(address, value);
 }
@@ -344,4 +355,24 @@ z3::expr ast_visitor::push(const z3::expr& value) {
     z3::expr address = ctx.z3_ctx.int_val(ctx.mem.allocate(1));
     ctx.mem.write(address, value);
     return address;
+}
+
+void ast_visitor::assign(block* block, const clang::Expr* expr, const z3::expr& value) {
+    if (clang::isa<clang::ArraySubscriptExpr>(expr)) {
+        const auto* array_subscript_expr = clang::cast<clang::ArraySubscriptExpr>(expr);
+        const auto base = transformExpr(block, array_subscript_expr->getBase());
+        const auto idx = transformExpr(block, array_subscript_expr->getIdx());
+        if (!base.has_value() || !idx.has_value()) {
+            return;
+        }
+        return assign(block, array_subscript_expr->getBase(), z3::store(base.value(), idx.value(), value));
+    } else if (clang::isa<clang::DeclRefExpr>(expr)) {
+        const auto* decl_ref_expr = clang::cast<clang::DeclRefExpr>(expr);
+        auto* var = block->get_var(decl_ref_expr->getDecl());
+        if (var == nullptr) {
+            return;
+        }
+        var->next_version();
+        ctx.solver.add(var->to_z3_expr() == value);
+    }
 }
