@@ -24,7 +24,7 @@ static llvm::cl::extrahelp MoreHelp("\nMore help text...\n");
 #include "OpenCL/cl.h"
 
 int main(int argc, const char **argv) {
-    analyzer azer("/Users/ali-al/CLionProjects/opencl-restrict-analyzer/test/resources/test_simple.cl");
+    clsma::analyzer analyzer("/Users/ali-al/CLionProjects/opencl-restrict-analyzer/test/resources/test_simple.cl");
     const size_t global_size = 16;
     const size_t local_size = 1;
     cl_platform_id platform_id;
@@ -40,7 +40,7 @@ int main(int argc, const char **argv) {
     size_t arg_sizes[3] = { sizeof(cl_mem), sizeof(cl_mem), sizeof(cl_mem) };
     void* arg_values[3] = {&b1, &b2, &b3};
     //try {
-        azer.analyze("vecadd", 1, &global_size, &local_size, 3, arg_sizes, arg_values);
+        analyzer.analyze(clsma::checks::address | clsma::checks::restrict, "vecadd", 1, &global_size, &local_size, 3, arg_sizes, arg_values);
     //} catch (z3::exception& ex) {
     //    std::cerr << "z3::exception: " << ex.what() << std::endl;
     //}

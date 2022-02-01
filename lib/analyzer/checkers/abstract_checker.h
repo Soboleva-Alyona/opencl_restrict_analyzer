@@ -10,6 +10,7 @@
 
 #include "../model/memory.h"
 #include "../analyzer_context.h"
+#include "violation.h"
 
 class abstract_checker {
 public:
@@ -20,17 +21,20 @@ public:
 
     explicit abstract_checker(analyzer_context& ctx);
     virtual ~abstract_checker() = default;
-    virtual void check_memory_access(const block* block, const clang::Expr* expr, memory_access_type access_type, const z3::expr& address) = 0;
+    virtual std::optional<clsma::violation> check_memory_access(const clsma::block* block, const clang::Expr* expr, memory_access_type access_type, const z3::expr& address) = 0;
 protected:
     z3::context& z3_ctx;
-    const block_context& block_ctx;
+    const clsma::block_context& block_ctx;
 
     void write_meta(std::string_view meta, const z3::expr& address, const z3::expr& value);
     [[nodiscard]] z3::expr read_meta(std::string_view meta, const z3::expr& address, const z3::sort& sort) const;
     [[nodiscard]] z3::expr read_meta(std::string_view meta, const z3::sort& sort) const;
 
     void assume(const z3::expr& assumption);
-    std::optional<z3::model> check(const z3::expr& assumption);
+    std::optional<z3::model> check(const clsma::block* block, const z3::expr& assumption);
+    [[nodiscard]] const clang::SourceManager& get_source_manager() const;
+
+    static const clang::ValueDecl* get_pointer_decl(const clang::Expr* expr);
 private:
     analyzer_context& ctx;
     z3::expr_vector assumptions;

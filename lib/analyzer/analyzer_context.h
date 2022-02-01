@@ -17,7 +17,7 @@ public:
     z3::context z3_ctx;
     z3::solver solver;
     memory mem;
-    block_context block_ctx;
+    clsma::block_context block_ctx;
 };
 
 #endif //OPENCL_RESTRICT_ANALYZER_ANALYZER_CONTEXT_H

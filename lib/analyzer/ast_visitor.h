@@ -15,30 +15,43 @@ public:
     explicit ast_visitor(analyzer_context& ctx);
     bool VisitFunctionDecl(clang::FunctionDecl* f);
 private:
-    void transformStmt(block* block, clang::Stmt* stmt);
-    void transformCompoundStmt(block* block, clang::CompoundStmt* compound_stmt);
-    void processDeclStmt(block* block, clang::DeclStmt* decl_stmt);
-    void processDecl(block* block, clang::Decl* decl);
-    void processVarDecl(block* block, clang::VarDecl* var_decl);
+    bool process_stmt(clsma::block* block, const clang::Stmt* stmt, clsma::value_reference& ret_ref);
+    bool process_compound_stmt(clsma::block* block, const clang::CompoundStmt* compound_stmt, clsma::value_reference& ret_ref);
+    bool process_while_stmt(clsma::block* block, const clang::WhileStmt* while_stmt, clsma::value_reference& ret_ref);
+    bool process_if_stmt(clsma::block* block, const clang::IfStmt* if_stmt, clsma::value_reference& ret_ref);
+    bool process_return_stmt(clsma::block* block, const clang::ReturnStmt* return_stmt, clsma::value_reference& ret_ref);
 
-    std::optional<z3::expr> transformValueStmt(block* block, const clang::ValueStmt* value_stmt);
-    std::optional<z3::expr> transformExpr(block* block, const clang::Expr* expr);
-    std::optional<z3::expr> transformArraySubscriptExpr(block* block, const clang::ArraySubscriptExpr* array_subscript_expr);
-    std::optional<z3::expr> transformBinaryOperator(block* block, const clang::BinaryOperator* binary_operator);
-    std::optional<z3::expr> transformUnaryOperator(block* block, const clang::UnaryOperator* unary_operator);
-    std::optional<z3::expr> transformCallExpr(block* block, const clang::CallExpr* call_expr);
-    std::optional<z3::expr> transformDeclRefExpr(block* block, const clang::DeclRefExpr* decl_ref_expr);
-    std::optional<z3::expr> transformImplicitCastExpr(block* block, const clang::ImplicitCastExpr* implicit_cast_expr);
-    std::optional<z3::expr> transformParenExpr(block* block, const clang::ParenExpr* paren_expr);
+    void process_decl_stmt(clsma::block* block, const clang::DeclStmt* decl_stmt, clsma::value_reference& ret_ref);
+    void process_decl(clsma::block* block, const clang::Decl* decl, clsma::value_reference& ret_ref);
+    void process_var_decl(clsma::block* block, const clang::VarDecl* var_decl, clsma::value_reference& ret_ref);
 
-    void assign(block* block, const clang::Expr* expr, const z3::expr& value);
-    z3::expr read(const block* block, const clang::Expr* expr, const z3::expr& address);
-    void write(const block* block, const clang::Expr* expr, const z3::expr& address, const z3::expr& value);
+    clsma::optional_value transform_value_stmt(clsma::block* block, const clang::ValueStmt* value_stmt);
+    clsma::optional_value transform_expr(clsma::block* block, const clang::Expr* expr);
+    clsma::optional_value transform_array_subscript_expr(clsma::block* block, const clang::ArraySubscriptExpr* array_subscript_expr);
+    clsma::optional_value transform_binary_operator(clsma::block* block, const clang::BinaryOperator* binary_operator);
+    clsma::optional_value transform_unary_operator(clsma::block* block, const clang::UnaryOperator* unary_operator);
+    clsma::optional_value transform_call_expr(clsma::block* block, const clang::CallExpr* call_expr);
+    clsma::optional_value transform_decl_ref_expr(clsma::block* block, const clang::DeclRefExpr* decl_ref_expr);
+    clsma::optional_value transform_implicit_cast_expr(clsma::block* block, const clang::ImplicitCastExpr* implicit_cast_expr);
+    clsma::optional_value transform_paren_expr(clsma::block* block, const clang::ParenExpr* paren_expr);
+
+    std::optional<z3::expr> get_address(clsma::block* block, const clang::Expr* expr);
+    void assign(clsma::block* block, const clang::Expr* expr, const clsma::optional_value& value);
+    void assign(clsma::block* block, const clang::Expr* expr, const clsma::optional_value& value, const std::optional<z3::expr>& storage);
+    z3::expr read(const clsma::block* block, const clang::Expr* expr, const z3::expr& address);
+    void write(const clsma::block* block, const clang::Expr* expr, const z3::expr& address, const z3::expr& value);
     z3::expr push(const z3::expr& value);
+
+    z3::expr unknown(const z3::sort& sort);
+
+    void check_memory_access(const clsma::block* block, const clang::Expr* expr, abstract_checker::memory_access_type access_type, const z3::expr& address);
 
     std::vector<z3::expr> predicates;
 
     analyzer_context& ctx;
+    clsma::block* global_block;
+
+    clsma::block* get_call_block(clsma::block* block);
 
     /*const analyzer_parameters& parameters;
     clang::ASTContext& ast_ctx;
@@ -49,7 +62,7 @@ private:
 
     std::vector<std::unique_ptr<abstract_checker>> checkers;
 
-    size_t mem_version = 1;
+    size_t unknowns = 0;
 };
 
 
