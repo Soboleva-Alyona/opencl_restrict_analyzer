@@ -55,7 +55,8 @@ void clsma::analyzer::analyze(uint32_t checks, std::string_view kernel_name,
             .args = args,
             .work_dim = work_dim,
             .global_work_size = std::vector(global_work_size, global_work_size + work_dim),
-            .local_work_size = std::vector(local_work_size, local_work_size + work_dim),
+            .local_work_size = local_work_size == nullptr ? std::nullopt
+                    : std::make_optional<std::vector<size_t>>(local_work_size, local_work_size + work_dim),
             .options = {
                     .array_values = false
             }

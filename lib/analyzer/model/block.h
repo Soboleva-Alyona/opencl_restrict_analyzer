@@ -12,154 +12,168 @@
 
 #include <z3++.h>
 
-#include "memory.h"
 #include "var.h"
 #include "optional_value.h"
 
 namespace clsma {
 
-class block;
-class variable;
+    class block;
 
-class value_reference {
-    friend class block;
-public:
-    [[nodiscard]] z3::expr to_z3_expr() const;
-    [[nodiscard]] z3::expr to_z3_expr(const std::string& key) const;
+    class variable;
 
-    [[nodiscard]] clsma::optional_value to_value() const;
+    class value_reference {
+        friend class block;
 
-    const clsma::block* const block;
-protected:
-    value_reference(const clsma::block* block, std::string unique_id, std::string name, z3::sort sort);
+    public:
+        [[nodiscard]] z3::expr to_z3_expr() const;
 
-    [[nodiscard]] clsma::variable* as_variable();
-    [[nodiscard]] virtual const clsma::variable* as_variable() const;
+        [[nodiscard]] z3::expr to_z3_expr(const std::string& key) const;
 
-    const std::string unique_id;
-    const std::string name;
-    const z3::sort sort;
-    uint64_t version = 0;
-private:
-    std::unordered_set<std::string> meta_keys;
-};
+        [[nodiscard]] clsma::optional_value to_value() const;
 
-class variable : public value_reference {
-    friend class block;
-private:
-    variable(const clsma::block* block, const clang::VarDecl*, const clang::QualType& type, uint64_t size, uint64_t address);
+        const clsma::block* const block;
+    protected:
+        value_reference(const clsma::block* block, std::string unique_id, std::string name, z3::sort sort);
 
-protected:
-    [[nodiscard]] const clsma::variable* as_variable() const final;
+        [[nodiscard]] clsma::variable* as_variable();
 
-public:
-    const clang::VarDecl* const decl;
-    const clang::QualType type;
-    const uint64_t size;
-    const uint64_t address;
+        [[nodiscard]] virtual const clsma::variable* as_variable() const;
 
-    //void next_version()
+        const std::string unique_id;
+        const std::string name;
+        const z3::sort sort;
+        uint64_t version = 0;
+    private:
+        std::unordered_set<std::string> meta_keys;
+    };
 
-    [[nodiscard]] z3::expr to_z3_storage_expr() const;
-};
+    class variable : public value_reference {
+        friend class block;
 
-class block_context {
-    friend class block;
+    private:
+        variable(const clsma::block* block, const clang::VarDecl*, const clang::QualType& type, uint64_t size,
+                 uint64_t address);
 
-    friend class variable;
-    friend class clsma::value_reference;
-public:
-    block_context(clang::ASTContext const& ast_ctx, z3::solver& solver, memory& mem);
+    protected:
+        [[nodiscard]] const clsma::variable* as_variable() const final;
 
-    [[nodiscard]] block* make_block();
+    public:
+        const clang::VarDecl* const decl;
+        const clang::QualType type;
+        const uint64_t size;
+        const uint64_t address;
 
-    [[nodiscard]] const block* get_block(int64_t block_id) const;
+        //void next_version()
 
-private:
-    [[nodiscard]] block* make_block(block* parent, std::optional<z3::expr> precondition);
+        [[nodiscard]] z3::expr to_z3_storage_expr() const;
+    };
 
-    clang::ASTContext const& ast_ctx;
-    z3::solver& solver;
-    z3::context& z3_ctx;
-    memory& mem;
-    uint64_t next_id = 1;
-    uint64_t versioned_values = 1;
-    uint64_t mem_ptr = 1;
+    class block_context {
+        friend class block;
 
-    std::unordered_map<int64_t, block> blocks;
-};
+        friend class variable;
 
-class block {
-    friend class block_context;
+        friend class clsma::value_reference;
 
-    friend class variable;
-    friend class clsma::value_reference;
+    public:
+        block_context(clang::ASTContext const& ast_ctx, z3::solver& solver);
 
-public:
-    [[nodiscard]] block* make_inner();
+        [[nodiscard]] block* make_block();
 
-    [[nodiscard]] block* make_inner(z3::expr precondition);
+        uint64_t allocate(uint64_t size);
+    private:
+        [[nodiscard]] block* make_block(block* parent, std::optional<z3::expr> precondition);
 
-    /** Joins states of all not yet joined inner blocks with a precondition into the state of this block. */
-    void join();
+        clang::ASTContext const& ast_ctx;
+        z3::solver& solver;
+        z3::context& z3_ctx;
+        uint64_t next_id = 1;
+        uint64_t versioned_values = 1;
+        uint64_t mem_ptr = 1;
 
-    [[nodiscard]] const block* const* inner_begin() const;
+        std::unordered_map<int64_t, block> blocks;
+    };
 
-    [[nodiscard]] const block* const* inner_end() const;
+    class block {
+        friend class block_context;
 
-    void write(const z3::expr& address, const z3::expr& value);
-    [[nodiscard]] z3::expr read(const z3::expr& address, const clang::QualType& type);
-    [[nodiscard]] z3::expr read(const z3::expr& address, const z3::sort& sort);
+        friend class variable;
 
-    value_reference* value_decl(std::string name, const clang::QualType& type);
-    void var_set(value_reference* var, const clsma::optional_value& value);
+        friend class clsma::value_reference;
 
-    variable* decl_var(const clang::VarDecl* decl, const clsma::optional_value& value = clsma::optional_value());
+    public:
+        [[nodiscard]] block* make_inner();
 
-    variable* set_var(const clang::ValueDecl* decl, const clsma::optional_value& value);
+        [[nodiscard]] block* make_inner(std::optional<z3::expr> precondition);
 
-    variable* set_var(const clang::ValueDecl* decl, const clsma::optional_value& value, const z3::expr& address);
+        /** Joins states of all not yet joined inner blocks with a precondition into the state of this block. */
+        void join();
 
-    variable* set_var(int64_t decl_id, const clsma::optional_value& value);
+        [[nodiscard]] const block* const* inner_begin() const;
 
-    variable* set_var(int64_t decl_id, const clsma::optional_value& value, const z3::expr& address);
+        [[nodiscard]] const block* const* inner_end() const;
 
-    [[nodiscard]] variable* get_var(const clang::ValueDecl* decl);
+        void write(const z3::expr& address, const z3::expr& value);
 
-    [[nodiscard]] const variable* get_var(const clang::ValueDecl* decl) const;
+        [[nodiscard]] z3::expr read(const z3::expr& address, const clang::QualType& type);
 
-    [[nodiscard]] variable* get_var(int64_t decl_id);
+        [[nodiscard]] z3::expr read(const z3::expr& address, const z3::sort& sort);
 
-    [[nodiscard]] const variable* get_var(int64_t decl_id) const;
+        value_reference* value_decl(std::string name, const clang::QualType& type);
 
-    void assume(const z3::expr& assumption);
+        value_reference* value_decl(std::string name, const z3::sort& sort);
 
-    [[nodiscard]] z3::check_result check(const z3::expr& assumption) const;
+        void var_set(value_reference* var, const clsma::optional_value& value);
 
-    [[nodiscard]] std::optional<z3::expr> get_assumption() const;
+        variable* decl_var(const clang::VarDecl* decl, const clsma::optional_value& value = clsma::optional_value());
 
-    block* const parent;
-    const uint64_t id;
-protected:
-    [[nodiscard]] clsma::value_reference* get(const std::string& unique_id);
-    [[nodiscard]] const clsma::value_reference* get(const std::string& unique_id) const;
-    clsma::value_reference* set(const std::string& unique_id, const clsma::optional_value& value);
-private:
-    explicit block(block_context& ctx);
+        variable* set_var(const clang::ValueDecl* decl, const clsma::optional_value& value);
 
-    block(block* parent, std::optional<z3::expr> precondition);
+        variable* set_var(const clang::ValueDecl* decl, const clsma::optional_value& value, const z3::expr& address);
 
-    block_context& ctx;
+        variable* set_var(int64_t decl_id, const clsma::optional_value& value);
 
-    const std::optional<z3::expr> precondition;
-    std::optional<z3::expr> assumptions;
+        variable* set_var(int64_t decl_id, const clsma::optional_value& value, const z3::expr& address);
 
-    std::vector<block*> children;
-    std::unordered_map<std::string, std::unique_ptr<value_reference>> variables;
+        [[nodiscard]] variable* get_var(const clang::ValueDecl* decl);
 
-    std::vector<block*> forks;
-    std::unordered_set<std::string> forked_decl_ids;
-};
+        [[nodiscard]] const variable* get_var(const clang::ValueDecl* decl) const;
+
+        [[nodiscard]] variable* get_var(int64_t decl_id);
+
+        [[nodiscard]] const variable* get_var(int64_t decl_id) const;
+
+        void assume(const z3::expr& assumption);
+
+        [[nodiscard]] z3::check_result check(const z3::expr& assumption) const;
+
+        [[nodiscard]] std::optional<z3::expr> get_assumption() const;
+
+        block* const parent;
+        const uint64_t id;
+    protected:
+        [[nodiscard]] clsma::value_reference* get(const std::string& unique_id);
+
+        [[nodiscard]] const clsma::value_reference* get(const std::string& unique_id) const;
+
+        clsma::value_reference* set(const std::string& unique_id, const clsma::optional_value& value);
+
+    private:
+        explicit block(block_context& ctx);
+
+        block(block* parent, std::optional<z3::expr> precondition);
+
+        block_context& ctx;
+
+        const std::optional<z3::expr> precondition;
+        std::optional<z3::expr> assumptions;
+
+        std::vector<block*> children;
+        std::unordered_map<std::string, std::unique_ptr<value_reference>> variables;
+
+        std::vector<block*> forks;
+        std::unordered_set<std::string> forked_decl_ids;
+    };
 }
 
 

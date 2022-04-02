@@ -8,11 +8,11 @@ class restrict_checker : public abstract_checker {
 public:
     explicit restrict_checker(analyzer_context& ctx);
 
-    std::optional<clsma::violation> check_memory_access(const clsma::block* block, const clang::Expr* expr, memory_access_type access_type, const z3::expr& address) override;
+    std::optional<clsma::violation> check_memory_access(const clsma::block* block, const clang::Expr* expr, clsma::memory_access_type access_type, const z3::expr& address) override;
 private:
     struct memory_access_data {
         const clang::Expr* const expr;
-        const memory_access_type access_type;
+        const clsma::memory_access_type access_type;
         const z3::expr address;
         const clsma::variable* const var;
     };
@@ -22,11 +22,6 @@ private:
 
     std::unordered_map<const clsma::block*, std::vector<memory_access_data>> accesses;
     std::unordered_map<const clsma::block*, std::vector<memory_access_data>> restrict_writes;
-
-    [[nodiscard]] z3::expr read_accesses(const clsma::block* block, const z3::expr& address);
-    void write_access(const clsma::block* block, const z3::expr& address, const clsma::variable* var);
-    [[nodiscard]] z3::expr read_restrict_writes(const clsma::block* block, const z3::expr& address);
-    void write_restrict_write(const clsma::block* block, const z3::expr& address, const clsma::variable* var);
 };
 
 

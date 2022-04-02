@@ -8,27 +8,18 @@
 
 #include <z3++.h>
 
-#include "../model/memory.h"
+#include "../model/memory_access_type.h"
 #include "../analyzer_context.h"
 #include "violation.h"
 
 class abstract_checker {
 public:
-    enum memory_access_type {
-        READ,
-        WRITE
-    };
-
     explicit abstract_checker(analyzer_context& ctx);
     virtual ~abstract_checker() = default;
-    virtual std::optional<clsma::violation> check_memory_access(const clsma::block* block, const clang::Expr* expr, memory_access_type access_type, const z3::expr& address) = 0;
+    virtual std::optional<clsma::violation> check_memory_access(const clsma::block* block, const clang::Expr* expr, clsma::memory_access_type access_type, const z3::expr& address) = 0;
 protected:
     z3::context& z3_ctx;
     const clsma::block_context& block_ctx;
-
-    void write_meta(std::string_view meta, const z3::expr& address, const z3::expr& value);
-    [[nodiscard]] z3::expr read_meta(std::string_view meta, const z3::expr& address, const z3::sort& sort) const;
-    [[nodiscard]] z3::expr read_meta(std::string_view meta, const z3::sort& sort) const;
 
     void assume(const z3::expr& assumption);
     std::optional<z3::model> check(const clsma::block* block, const z3::expr& assumption);

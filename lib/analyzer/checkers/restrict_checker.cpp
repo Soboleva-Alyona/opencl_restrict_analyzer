@@ -5,12 +5,12 @@
 #include <clang/AST/Expr.h>
 
 restrict_checker::restrict_checker(analyzer_context& ctx) : abstract_checker(ctx) {
-    //const auto address = z3_ctx.constant("address", z3_ctx.int_sort());
-    //const auto decl_id = z3_ctx.constant("decl_id", z3_ctx.int_sort());
+    //const auto address = z3.constant("address", z3.int_sort());
+    //const auto decl_id = z3.constant("decl_id", z3.int_sort());
     //assume(z3::forall(address,z3::forall(decl_id, z3::select(read_meta("ACCESSES", address,
-    //                                    z3_ctx.array_sort(z3_ctx.int_sort(), z3_ctx.array_sort(z3_ctx.int_sort(), z3_ctx.bool_sort()))), decl_id)
-    //== z3::empty_set(z3_ctx.int_sort()))));
-    //assume(z3::forall(address, read_meta("RESTRICT_WRITES", address, z3_ctx.bool_sort()) == z3_ctx.bool_val(false)));
+    //                                    z3.array_sort(z3.int_sort(), z3.array_sort(z3.int_sort(), z3.bool_sort()))), decl_id)
+    //== z3::empty_set(z3.int_sort()))));
+    //assume(z3::forall(address, read_meta("RESTRICT_WRITES", address, z3.bool_sort()) == z3.bool_val(false)));
 }
 
 namespace {
@@ -53,7 +53,7 @@ namespace {
 
 std::optional<clsma::violation> restrict_checker::check_memory_access(const clsma::block* const block,
                                                                       const clang::Expr* const expr,
-                                                                      const abstract_checker::memory_access_type access_type,
+                                                                      const clsma::memory_access_type access_type,
                                                                       const z3::expr& address) {
     const clang::ValueDecl* value_decl = nullptr;
     if (clang::isa<clang::ArraySubscriptExpr>(expr)) {
@@ -77,8 +77,8 @@ std::optional<clsma::violation> restrict_checker::check_memory_access(const clsm
     accesses[block].emplace_back(access_data);
     //write_access(block, address, variable);
 
-    //write_meta("ACCESSES", address, z3::set_add(read_meta("ACCESSES", address, z3_ctx.array_sort(z3_ctx.int_sort(), z3_ctx.bool_sort())), z3_ctx.int_val(value_decl->getID())));
-    if (value_decl->getType().isRestrictQualified() && access_type == WRITE) {
+    //write_meta("ACCESSES", address, z3::set_add(read_meta("ACCESSES", address, z3.array_sort(z3.int_sort(), z3.bool_sort())), z3.int_val(value_decl->getID())));
+    if (value_decl->getType().isRestrictQualified() && access_type == clsma::write) {
         restrict_writes[block].emplace_back(access_data);
         //write_restrict_write(block, address, variable);
         //restrict_writes[variable->block].emplace(variable);
@@ -127,33 +127,33 @@ std::optional<clsma::violation> restrict_checker::check_memory_access(const clsm
                     .message = message.str()
                 };
             }
-            //const auto id = result.optional_value().eval(z3_ctx.constant("ID", z3_ctx.int_sort())).as_int64();
+            //const auto id = result.optional_value().eval(z3.constant("ID", z3.int_sort())).as_int64();
             //std::cout << id << std::endl;
             //std::cout << "this variable name: " << variable->decl->getName().str() << std::endl;
             //std::cout << "variable name: " << block->get_var(id)->decl->getName().str() << std::endl;
             //std::cout << "address: " << result.optional_value().eval(address).as_int64() << std::endl;
         }
-        /*const z3::expr other_id = z3_ctx.constant("ID", z3_ctx.int_sort());
-        z3::expr condition = z3_ctx.bool_val(false);
+        /*const z3::expr other_id = z3.constant("ID", z3.int_sort());
+        z3::expr condition = z3.bool_val(false);
         for (const auto* affected_block : affected_blocks) {
             condition = condition ||
-                    other_id != z3_ctx.int_val(value_decl->getID()) && z3::set_member(other_id, read_accesses(affected_block, address));
+                    other_id != z3.int_val(value_decl->getID()) && z3::set_member(other_id, read_accesses(affected_block, address));
         }
         const auto result = check(condition);
         if (result.has_value()) {
-            const auto id = result.optional_value().eval(z3_ctx.constant("ID", z3_ctx.int_sort())).as_int64();
+            const auto id = result.optional_value().eval(z3.constant("ID", z3.int_sort())).as_int64();
             std::cout << id << std::endl;
             std::cout << "this variable name: " << variable->decl->getName().str() << std::endl;
             std::cout << "variable name: " << block->get_var(id)->decl->getName().str() << std::endl;
             std::cout << "address: " << result.optional_value().eval(address).as_int64() << std::endl;
         }*/
 
-        /*write_meta("RESTRICT_WRITES", address, z3_ctx.bool_val(true));
-        const auto ch = z3_ctx.constant("ID", z3_ctx.int_sort()) != z3_ctx.int_val(value_decl->getID()) &&
-                z3::set_member(z3_ctx.constant("ID", z3_ctx.int_sort()), read_meta("ACCESSES", address, z3_ctx.array_sort(z3_ctx.int_sort(), z3_ctx.bool_sort())));
+        /*write_meta("RESTRICT_WRITES", address, z3.bool_val(true));
+        const auto ch = z3.constant("ID", z3.int_sort()) != z3.int_val(value_decl->getID()) &&
+                z3::set_member(z3.constant("ID", z3.int_sort()), read_meta("ACCESSES", address, z3.array_sort(z3.int_sort(), z3.bool_sort())));
         const auto result = check(ch);
         if (result.has_value()) {
-            const auto id = result.optional_value().eval(z3_ctx.constant("ID", z3_ctx.int_sort())).as_int64();
+            const auto id = result.optional_value().eval(z3.constant("ID", z3.int_sort())).as_int64();
             std::cout << id << std::endl;
         }*/
     } else {
@@ -179,15 +179,15 @@ std::optional<clsma::violation> restrict_checker::check_memory_access(const clsm
             affected_blocks.emplace(cur_block);
         }
 
-        const z3::expr other_id = z3_ctx.constant("ID", z3_ctx.int_sort());
-        z3::expr condition = z3_ctx.bool_val(false);
+        const z3::expr other_id = z3.constant("ID", z3.int_sort());
+        z3::expr condition = z3.bool_val(false);
         for (const auto* affected_block : affected_blocks) {
             condition = condition ||
-                        other_id != z3_ctx.int_val(value_decl->getID()) && z3::set_member(other_id, read_restrict_writes(affected_block, address));
+                        other_id != z3.int_val(value_decl->getID()) && z3::set_member(other_id, read_restrict_writes(affected_block, address));
         }
         const auto result = check(condition);
         if (result.has_value()) {
-            const auto id = result.optional_value().eval(z3_ctx.constant("ID", z3_ctx.int_sort())).as_int64();
+            const auto id = result.optional_value().eval(z3.constant("ID", z3.int_sort())).as_int64();
             std::cout << id << std::endl;
         }*/
     }
@@ -206,7 +206,7 @@ std::optional<clsma::violation> restrict_checker::check_memory_access(const clsm
    //     }
    // }
 
-   // const auto decl_id = z3_ctx.constant("DECL_ID", z3_ctx.int_sort());
+   // const auto decl_id = z3.constant("DECL_ID", z3.int_sort());
 
     // const access_block = block_by_decl(value_decl);
     // for block : restrict_writes_blocks
@@ -214,39 +214,7 @@ std::optional<clsma::violation> restrict_checker::check_memory_access(const clsm
     //
     //
     //
-    //check(!z3::implies(read_meta("RESTRICT_WRITES", address, z3_ctx.bool_sort()) == true, false));
+    //check(!z3::implies(read_meta("RESTRICT_WRITES", address, z3.bool_sort()) == true, false));
     //check(z3::implies(read_meta("r", address, ctx.bool_sort()), z3::se));
     return std::nullopt;
-}
-
-namespace {
-    std::string blockd(const std::string& meta, const clsma::block* block) {
-        return meta + '#' + std::to_string(block->id);
-    }
-}
-
-z3::expr restrict_checker::read_accesses(const clsma::block* block, const z3::expr& address) {
-    if (accessed_blocks.insert(block).second) {
-        const auto any_address = z3_ctx.constant("address", z3_ctx.int_sort());
-        assume(z3::forall(any_address, read_accesses(block, any_address) == z3::empty_set(z3_ctx.int_sort())));
-    }
-    return read_meta(blockd("ACCESSES", block), address, z3_ctx.array_sort(z3_ctx.int_sort(), z3_ctx.bool_sort()));
-}
-
-void restrict_checker::write_access(const clsma::block* block, const z3::expr& address, const clsma::variable* var) {
-    write_meta(blockd("ACCESSES", block), address, z3::set_add(read_accesses(block, address), z3_ctx.int_val(var->decl->getID())));
-}
-
-z3::expr restrict_checker::read_restrict_writes(const clsma::block* block, const z3::expr& address) {
-    if (restrict_written_blocks.insert(block).second) {
-        assume(read_meta(blockd("RESTRICT_WRITES", block), z3_ctx.array_sort(z3_ctx.int_sort(), z3_ctx.bool_sort())) == z3::const_array(z3_ctx.int_sort(), z3::empty_set(z3_ctx.int_sort())));
-        //const auto any_address = z3_ctx.constant("address", z3_ctx.int_sort());
-        //const auto any_decl_id = z3_ctx.constant("decl_id", z3_ctx.int_sort());
-        //assume(z3::forall(any_address, z3::forall(any_decl_id, !z3::set_member(any_decl_id, read_restrict_writes(block, any_address)))));
-    }
-    return read_meta(blockd("RESTRICT_WRITES", block), address, z3_ctx.array_sort(z3_ctx.int_sort(), z3_ctx.bool_sort()));
-}
-
-void restrict_checker::write_restrict_write(const clsma::block* block, const z3::expr& address, const clsma::variable* var) {
-    write_meta(blockd("RESTRICT_WRITES", block), address, z3::set_add(read_restrict_writes(block, address), z3_ctx.int_val(var->decl->getID())));
 }

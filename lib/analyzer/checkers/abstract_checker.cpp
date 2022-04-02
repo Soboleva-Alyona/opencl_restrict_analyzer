@@ -1,19 +1,7 @@
 #include "abstract_checker.h"
 
 abstract_checker::abstract_checker(analyzer_context& ctx)
-: z3_ctx(ctx.z3_ctx), block_ctx(ctx.block_ctx), ctx(ctx), assumptions(z3_ctx) { }
-
-void abstract_checker::write_meta(std::string_view meta, const z3::expr& address, const z3::expr& value) {
-    ctx.mem.write_meta(meta, address, value);
-}
-
-z3::expr abstract_checker::read_meta(std::string_view meta, const z3::expr& address, const z3::sort& sort) const {
-    return ctx.mem.read_meta(meta, address, sort);
-}
-
-z3::expr abstract_checker::read_meta(std::string_view meta, const z3::sort& sort) const {
-    return ctx.mem.read_meta(meta, sort);
-}
+: z3_ctx(ctx.z3), block_ctx(ctx.block), ctx(ctx), assumptions(z3_ctx) { }
 
 void abstract_checker::assume(const z3::expr& assumption) {
     assumptions.push_back(assumption);
@@ -42,7 +30,7 @@ std::optional<z3::model> abstract_checker::check(const clsma::block* block, cons
 }
 
 const clang::SourceManager& abstract_checker::get_source_manager() const {
-    return ctx.ast_ctx.getSourceManager();
+    return ctx.ast.getSourceManager();
 }
 
 namespace {
