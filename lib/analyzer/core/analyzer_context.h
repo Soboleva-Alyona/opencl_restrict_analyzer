@@ -9,20 +9,20 @@
 #include "analyzer_parameters.h"
 #include "block.h"
 
-namespace clsma {
+namespace clsa {
     class ast_visitor;
 
     class analyzer_context {
-        friend class clsma::ast_visitor;
+        friend class clsa::ast_visitor;
     public:
-        analyzer_context(const clsma::analyzer_parameters& parameters, clang::ASTContext& ast_ctx);
+        analyzer_context(const clsa::analyzer_parameters& parameters, clang::ASTContext& ast_ctx);
 
-        const clsma::analyzer_parameters& parameters;
+        const clsa::analyzer_parameters& parameters;
 
         clang::ASTContext& ast;
         z3::context z3;
         z3::solver solver;
-        clsma::block_context block;
+        clsa::block_context block;
     };
 
 }

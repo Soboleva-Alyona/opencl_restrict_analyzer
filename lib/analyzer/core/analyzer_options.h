@@ -2,7 +2,7 @@
 #define OPENCL_RESTRICT_ANALYZER_ANALYZER_OPTIONS_H
 
 
-namespace clsma {
+namespace clsa {
 
     struct analyzer_options {
         const bool array_values = false;

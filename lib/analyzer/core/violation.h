@@ -6,7 +6,7 @@
 
 #include <clang/Basic/SourceLocation.h>
 
-namespace clsma {
+namespace clsa {
 
     struct violation {
         const clang::SourceLocation location;

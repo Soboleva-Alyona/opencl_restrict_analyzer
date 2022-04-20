@@ -9,7 +9,7 @@ __kernel void vecadd(__global int* __restrict a, __global int* __restrict b, __g
     //c[idx] = (a + 1)[pidx] + b[idx];
     //c[0] = (a + 1)[0] + b[0];
     b = c;
-    int i = get_global_id(1);
+    int i = 0;//get_global_id(1);
     while (i < 15) {
         b[i] = c[i + 3];
         i = i + 1;

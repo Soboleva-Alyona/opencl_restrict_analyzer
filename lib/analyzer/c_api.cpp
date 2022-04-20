@@ -3,24 +3,24 @@
 
 #include "c_api.h"
 
-struct clsma_context {
+struct clsa_context {
     std::unordered_set<void*> buffers;
 };
 
-struct clsma_buffer {
+struct clsa_buffer {
     size_t size;
 };
 
-struct clsma_kernel_args {
+struct clsa_kernel_args {
     std::vector<std::pair<size_t, void*>> args;
 };
 
 extern "C" {
-    clsma_context* clsma_create_context() {
-        return new clsma_context();
+    clsa_context* clsa_create_context() {
+        return new clsa_context();
     }
 
-    void clsma_delete_context(clsma_context* context) {
+    void clsa_delete_context(clsa_context* context) {
         delete context;
     }
 }

@@ -3,17 +3,17 @@
 #include <clang/AST/Expr.h>
 
 namespace {
-    void insert_inner_blocks(std::vector<const clsma::block*>& vector, const clsma::block* block) {
+    void insert_inner_blocks(std::vector<const clsa::block*>& vector, const clsa::block* block) {
         vector.push_back(block);
-        std::for_each(block->inner_begin(), block->inner_end(), [&](const clsma::block* inner) {
+        std::for_each(block->inner_begin(), block->inner_end(), [&](const clsa::block* inner) {
             insert_inner_blocks(vector, inner);
         });
     }
 }
 
-std::optional<clsma::violation> clsma::restrict_checker::check_memory_access(const clsma::block* const block,
+std::optional<clsa::violation> clsa::restrict_checker::check_memory_access(const clsa::block* const block,
                                                                              const clang::Expr* const expr,
-                                                                             const clsma::memory_access_type access_type,
+                                                                             const clsa::memory_access_type access_type,
                                                                              const z3::expr& address) {
     const clang::ValueDecl* value_decl = nullptr;
     if (clang::isa<clang::ArraySubscriptExpr>(expr)) {
@@ -27,7 +27,7 @@ std::optional<clsma::violation> clsma::restrict_checker::check_memory_access(con
     } else if (clang::isa<clang::ImplicitCastExpr>(expr)) {
         return check_memory_access(block, clang::cast<clang::ImplicitCastExpr>(expr)->getSubExpr(), access_type, address);
     }
-    const clsma::variable* var = block->var_get(value_decl);
+    const clsa::variable* var = block->var_get(value_decl);
     if (nullptr == var) {
         return std::nullopt;
     }
@@ -36,11 +36,11 @@ std::optional<clsma::violation> clsma::restrict_checker::check_memory_access(con
     };
     accesses[block].emplace_back(access_data);
 
-    std::vector<const clsma::block*> affected_blocks;
-    std::unordered_map<const clsma::block*, std::vector<memory_access_data>>* other_accesses_by_block;
+    std::vector<const clsa::block*> affected_blocks;
+    std::unordered_map<const clsa::block*, std::vector<memory_access_data>>* other_accesses_by_block;
     const char* operation_name;
     const char* other_operation_name;
-    if (value_decl->getType().isRestrictQualified() && access_type == clsma::write) {
+    if (value_decl->getType().isRestrictQualified() && access_type == clsa::write) {
         restrict_writes[block].emplace_back(access_data);
 
         insert_inner_blocks(affected_blocks, var->block);
@@ -52,7 +52,7 @@ std::optional<clsma::violation> clsma::restrict_checker::check_memory_access(con
             affected_blocks.emplace_back(cur_block);
         }
         other_accesses_by_block = &restrict_writes;
-        operation_name = access_type == clsma::write ? "write" : "read";
+        operation_name = access_type == clsa::write ? "write" : "read";
         other_operation_name = "restricted write";
     }
 
@@ -88,7 +88,7 @@ std::optional<clsma::violation> clsma::restrict_checker::check_memory_access(con
                     << other_operation_name << " through `" << other_access_data->var->decl->getName().str()
                     << "` (offset " << address_value - other_var_address_value << ") at "
                     << other_access_data->expr->getExprLoc().printToString(get_source_manager()) << std::endl;
-            return clsma::violation {
+            return clsa::violation {
                 .location = expr->getExprLoc(),
                 .message = message.str()
             };

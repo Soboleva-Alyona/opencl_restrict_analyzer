@@ -8,7 +8,7 @@
 
 #include <z3++.h>
 
-namespace clsma {
+namespace clsa {
 
     class optional_value {
     public:
@@ -20,7 +20,7 @@ namespace clsma {
         [[nodiscard]] bool has_value() const;
         [[nodiscard]] const z3::expr& value() const;
         void set_value(std::optional<z3::expr> value);
-        clsma::optional_value map_value(const std::function<std::optional<z3::expr>(z3::expr)>& mapper) const;
+        clsa::optional_value map_value(const std::function<std::optional<z3::expr>(z3::expr)>& mapper) const;
 
         [[nodiscard]] const std::unordered_map<std::string, z3::expr>& metadata() const;
         [[nodiscard]] std::optional<z3::expr> metadata(const std::string& key) const;

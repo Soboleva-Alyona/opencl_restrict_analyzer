@@ -10,15 +10,16 @@
 
 #include "analyzer_options.h"
 
-namespace clsma {
+namespace clsa {
 
     struct analyzer_parameters {
         const std::string kernel_name;
-        const std::vector<std::pair<size_t, void*>> args;
+        const std::vector<std::pair<std::size_t, void*>> args;
         const std::uint32_t work_dim;
-        const std::vector<size_t> global_work_size;
-        const std::optional<std::vector<size_t>> local_work_size;
-        const clsma::analyzer_options options;
+        const std::optional<std::vector<std::size_t>> global_work_offset;
+        const std::vector<std::size_t> global_work_size;
+        const std::optional<std::vector<std::size_t>> local_work_size;
+        const clsa::analyzer_options options;
     };
 
 }

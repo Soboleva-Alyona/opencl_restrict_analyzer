@@ -8,30 +8,30 @@
 #include "analyzer_parameters.h"
 #include "ast_visitor.h"
 
-namespace clsma {
+namespace clsa {
 
     class ast_consumer : public clang::ASTConsumer {
     public:
-        explicit ast_consumer(const clsma::analyzer_parameters& parameters,
-                              std::function<void(clsma::ast_consumer&, clsma::analyzer_context&)> initializer);
+        explicit ast_consumer(const clsa::analyzer_parameters& parameters,
+                              std::function<void(clsa::ast_consumer&, clsa::analyzer_context&)> initializer);
 
         void Initialize(clang::ASTContext& ctx) override;
         void HandleTranslationUnit(clang::ASTContext& ctx) override;
 
-        void set_violation_handler(std::function<void(clsma::violation)> handler);
+        void set_violation_handler(std::function<void(clsa::violation)> handler);
 
-        void add_checker(std::unique_ptr<clsma::abstract_checker> checker);
+        void add_checker(std::unique_ptr<clsa::abstract_checker> checker);
 
     private:
-        const clsma::analyzer_parameters& parameters;
-        std::function<void(clsma::ast_consumer&, clsma::analyzer_context&)> initializer;
+        const clsa::analyzer_parameters& parameters;
+        std::function<void(clsa::ast_consumer&, clsa::analyzer_context&)> initializer;
 
-        std::optional<clsma::analyzer_context> ctx;
+        std::optional<clsa::analyzer_context> ctx;
 
-        std::function<void(clsma::violation)> violation_handler;
-        std::vector<std::unique_ptr<clsma::abstract_checker>> checkers;
+        std::function<void(clsa::violation)> violation_handler;
+        std::vector<std::unique_ptr<clsa::abstract_checker>> checkers;
 
-        std::unique_ptr<clsma::ast_visitor> visitor;
+        std::unique_ptr<clsa::ast_visitor> visitor;
     };
 
 }

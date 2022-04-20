@@ -22,19 +22,19 @@ static llvm::cl::extrahelp CommonHelp(CommonOptionsParser::HelpMessage);
 static llvm::cl::extrahelp MoreHelp("\nMore help text...\n");
 
 int main(int argc, const char **argv) {
-    clsma::analyzer analyzer("/mnt/d/Users/Rhaza/CLionProjects/opencl_restrict_analyzer/test/resources/test_simple.cl");
+    clsa::analyzer analyzer("/mnt/d/Users/Rhaza/CLionProjects/opencl_restrict_analyzer/test/resources/test_simple.cl");
     const size_t global_size = 16;
     const size_t local_size = 1;
-    clsma::pseudocl_mem b1 = clsma::pseudocl_create_buffer(64);
-    clsma::pseudocl_mem b2 = clsma::pseudocl_create_buffer(64);
-    clsma::pseudocl_mem b3 = clsma::pseudocl_create_buffer(64);
-    size_t arg_sizes[3] = { sizeof(clsma::pseudocl_mem), sizeof(clsma::pseudocl_mem), sizeof(clsma::pseudocl_mem) };
+    clsa::pseudocl_mem b1 = clsa::pseudocl_create_buffer(64);
+    clsa::pseudocl_mem b2 = clsa::pseudocl_create_buffer(64);
+    clsa::pseudocl_mem b3 = clsa::pseudocl_create_buffer(64);
+    size_t arg_sizes[3] = { sizeof(clsa::pseudocl_mem), sizeof(clsa::pseudocl_mem), sizeof(clsa::pseudocl_mem) };
     void* arg_values[3] = {&b1, &b2, &b3};
     //try {
-        analyzer.analyze(clsma::analyzer::checks::address | clsma::analyzer::checks::restrict, "vecadd", 1, &global_size, &local_size, 3, arg_sizes, arg_values);
-    clsma::pseudocl_release_mem_object(b3);
-    clsma::pseudocl_release_mem_object(b2);
-    clsma::pseudocl_release_mem_object(b1);
+        analyzer.analyze(clsa::analyzer::checks::address | clsa::analyzer::checks::restrict, "vecadd", 1, &global_size, &local_size, 3, arg_sizes, arg_values);
+    clsa::pseudocl_release_mem_object(b3);
+    clsa::pseudocl_release_mem_object(b2);
+    clsa::pseudocl_release_mem_object(b1);
     //} catch (z3::exception& ex) {
     //    std::cerr << "z3::exception: " << ex.what() << std::endl;
     //}
