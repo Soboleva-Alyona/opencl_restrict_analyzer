@@ -1,0 +1,307 @@
+#include "block.h"
+
+namespace {
+    z3::sort type_to_sort(z3::context& z3_ctx, const clang::QualType& type) {
+        if (type->isIntegerType() || type->isPointerType()) {
+            return z3_ctx.int_sort();
+        } else if (type->isFloatingType()) {
+            return z3_ctx.real_sort();
+        } else if (type->isBooleanType()) {
+            return z3_ctx.bool_sort();
+        } else {
+            return z3_ctx.uninterpreted_sort(type->getTypeClassName());
+        }
+    }
+
+    void sort_to_id(const z3::sort& sort, std::string& output) {
+        if (sort.is_int()) {
+            output.push_back('I');
+        } else if (sort.is_real()) {
+            output.push_back('R');
+        } else if (sort.is_bool()) {
+            output.push_back('B');
+        } else if (sort.is_array() && sort.array_domain().is_int()) {
+            output.push_back('[');
+            sort_to_id(sort.array_range(), output);
+            output.push_back(']');
+        } else {
+            output.push_back('{');
+            output += sort.name().str();
+            output.push_back('}');
+        }
+    }
+}
+
+clsma::value_reference::value_reference(const clsma::block* block, std::string unique_id, std::string name,
+                                        const z3::sort& sort)
+    : block(block), unique_id(std::move(unique_id)), name(std::move(name)), sort(sort) {}
+
+clsma::variable* clsma::value_reference::as_variable() {
+    return const_cast<variable*>(const_cast<const value_reference*>(this)->as_variable());
+}
+
+const clsma::variable* clsma::value_reference::as_variable() const {
+    return nullptr;
+}
+
+z3::expr clsma::value_reference::to_z3_expr() const {
+    std::string z3_name = std::to_string(block->id).append("$").append(name);
+    if (version > 0) {
+        z3_name.append("!!").append(std::to_string(version));
+    }
+    return block->ctx.z3.constant(z3_name.c_str(), sort);
+}
+
+z3::expr clsma::value_reference::to_z3_expr(std::string_view key) const {
+    std::string z3_name = std::to_string(block->id).append("$").append(name).append("#").append(key);
+    if (version > 0) {
+        z3_name.append("!!").append(std::to_string(version));
+    }
+    return block->ctx.z3.constant(z3_name.c_str(), sort);
+}
+
+clsma::optional_value clsma::value_reference::to_value() const {
+    std::unordered_map <std::string, z3::expr> meta;
+    for (const auto& key: meta_keys) {
+        meta.emplace(key, to_z3_expr(key));
+    }
+    return {to_z3_expr(), std::move(meta)};
+}
+
+clsma::variable::variable(const class block* block, const clang::VarDecl* decl, const clang::QualType& type,
+                          uint64_t size,
+                          uint64_t address)
+    : value_reference(block, std::to_string(decl->getID()), decl->getName().str(), type_to_sort(block->ctx.z3, type)),
+      decl(decl), type(type),
+      size(size), address(address) {}
+
+const clsma::variable* clsma::variable::as_variable() const {
+    return this;
+}
+
+clsma::block::block(block_context& ctx) : ctx(ctx), id(ctx.next_id++), parent(nullptr) {}
+
+clsma::block::block(block* parent, std::optional <z3::expr> precondition) : ctx(parent->ctx), id(parent->ctx.next_id++),
+                                                                            parent(parent),
+                                                                            precondition(std::move(precondition)) {}
+
+void clsma::block::join() {
+    std::unordered_map <std::string, clsma::optional_value> values;
+    std::optional <z3::expr> joined_assumption;
+    for (const block* fork: forks) {
+        for (const auto& unique_id: fork->forked_decl_ids) {
+            if (!values.count(unique_id)) {
+                values.emplace(unique_id, get(unique_id)->to_value());
+            }
+            const auto& forked_optional_value = fork->variables.at(unique_id)->to_value();
+            auto& optional_value = values.at(unique_id);
+            const auto& joined_value = optional_value.has_value() ? optional_value.value() : get(
+                unique_id)->to_z3_expr();
+            optional_value.set_value(z3::ite(fork->precondition.value(), forked_optional_value.value(), joined_value));
+            for (const auto& [key, forked_meta]: forked_optional_value.metadata()) {
+                const auto& meta = optional_value.metadata(key);
+                const auto& joined_meta = meta.has_value() ? meta.value() : get(unique_id)->to_z3_expr(key);
+                optional_value.set_metadata(key, z3::ite(fork->precondition.value(), forked_meta, joined_meta));
+            }
+        }
+        const auto& forked_assumption = fork->get_assumption();
+        if (forked_assumption.has_value()) {
+            const auto assumption = z3::implies(fork->precondition.value(), forked_assumption.value());
+            joined_assumption = !joined_assumption.has_value() ? assumption
+                                                               : joined_assumption.value() && assumption;
+        }
+    }
+    for (const auto& [unique_id, value]: values) {
+        set(unique_id, value);
+    }
+    if (joined_assumption.has_value()) {
+        assume(joined_assumption.value());
+    }
+    forks.clear();
+}
+
+clsma::block* clsma::block::make_inner() {
+    return ctx.make_block(this, std::nullopt);
+}
+
+clsma::block* clsma::block::make_inner(std::optional <z3::expr> precondition) {
+    return ctx.make_block(this, std::move(precondition));
+}
+
+const clsma::block* const* clsma::block::inner_begin() const {
+    return children.data();
+}
+
+const clsma::block* const* clsma::block::inner_end() const {
+    return children.data() + children.size();
+}
+
+void clsma::block::write(const z3::expr& address, const z3::expr& value) {
+    std::string unique_id;
+    sort_to_id(value.get_sort(), unique_id);
+    auto* versioned_value = get(unique_id);
+    if (versioned_value == nullptr) {
+        auto* global = this;
+        while (global->parent) {
+            global = global->parent;
+        }
+        versioned_value = global->variables.emplace(unique_id, std::unique_ptr<clsma::value_reference>(
+            new clsma::value_reference(global, unique_id, unique_id,
+                ctx.z3.array_sort(ctx.z3.int_sort(), value.get_sort())))).first->second.get();
+    }
+    set(unique_id, z3::store(versioned_value->to_z3_expr(), address, value));
+}
+
+z3::expr clsma::block::read(const z3::expr& address, const clang::QualType& type) {
+    return read(address, type_to_sort(ctx.z3, type));
+}
+
+z3::expr clsma::block::read(const z3::expr& address, const z3::sort& sort) {
+    std::string unique_id;
+    sort_to_id(sort, unique_id);
+    return z3::select(get(unique_id)->to_z3_expr(), address);
+}
+
+clsma::value_reference* clsma::block::value_decl(std::string name, const clang::QualType& type) {
+    return value_decl(std::move(name), type_to_sort(ctx.z3, type));
+}
+
+clsma::value_reference* clsma::block::value_decl(std::string name, const z3::sort& sort) {
+    const auto unique_id = std::to_string(ctx.versioned_values++) + "%" + std::move(name);
+    return variables.emplace(unique_id, std::unique_ptr<clsma::value_reference>(
+        new clsma::value_reference(this, unique_id, unique_id, sort))).first->second.get();
+}
+
+void clsma::block::value_set(value_reference* value_ref, const optional_value& value) {
+    if (precondition.has_value() && value_ref->block != this) {
+        forked_decl_ids.emplace(value_ref->unique_id);
+        if (auto* var = value_ref->as_variable(); var != nullptr) {
+            value_ref = var_decl(var->decl);
+        } else {
+            value_ref = variables.emplace(value_ref->unique_id, std::unique_ptr<clsma::value_reference>(
+                new clsma::value_reference(this, value_ref->unique_id, value_ref->name, value_ref->sort)))
+                    .first->second.get();
+        }
+    } else {
+        ++value_ref->version;
+    }
+    if (value.has_value()) {
+        ctx.solver.add(value_ref->to_z3_expr() == value.value());
+        for (const auto& [key, meta] : value.metadata()) {
+            ctx.solver.add(value_ref->to_z3_expr(key) == meta);
+            value_ref->meta_keys.emplace(key);
+        }
+    }
+}
+
+clsma::variable* clsma::block::var_decl(const clang::VarDecl* decl, const clsma::optional_value& value) {
+    if (variables.count(std::to_string(decl->getID()))) {
+        return nullptr;
+    }
+    clsma::variable* retvar = variables.emplace(std::to_string(decl->getID()), std::unique_ptr<clsma::variable>(
+        new clsma::variable(this, decl, decl->getType(), 1, ctx.allocate(1))))
+            .first->second->as_variable();
+    if (value.has_value()) {
+        ctx.solver.add(retvar->to_z3_expr() == value.value());
+        for (const auto& [key, meta]: value.metadata()) {
+            ctx.solver.add(retvar->to_z3_expr(key) == meta);
+            retvar->meta_keys.emplace(key);
+        }
+    }
+    return retvar;
+}
+
+clsma::variable* clsma::block::var_set(const clang::ValueDecl* decl, const clsma::optional_value& value) {
+    return var_set(decl->getID(), value);
+}
+
+clsma::variable* clsma::block::var_set(int64_t decl_id, const clsma::optional_value& value) {
+    auto* var = var_get(decl_id);
+    if (!var) {
+        throw std::invalid_argument("trying to assign a value to an undeclared variable");
+    }
+    return set(std::to_string(decl_id), value)->as_variable();
+}
+
+clsma::variable* clsma::block::var_get(const clang::ValueDecl* decl) {
+    return decl ? var_get(decl->getID()) : nullptr;
+}
+
+const clsma::variable* clsma::block::var_get(const clang::ValueDecl* decl) const {
+    return decl ? var_get(decl->getID()) : nullptr;
+}
+
+clsma::variable* clsma::block::var_get(int64_t decl_id) {
+    return const_cast<variable*>(const_cast<const block*>(this)->var_get(decl_id));
+}
+
+const clsma::variable* clsma::block::var_get(int64_t decl_id) const {
+    const auto* value = get(std::to_string(decl_id));
+    return value ? value->as_variable() : nullptr;
+}
+
+void clsma::block::assume(const z3::expr& assumption) {
+    assumptions = assumptions.has_value() ? assumptions.value() && assumption : assumption;
+}
+
+std::optional <z3::expr> clsma::block::get_assumption() const {
+    std::optional <z3::expr> parent_assumption = parent ? parent->get_assumption() : std::nullopt;
+    std::optional <z3::expr> assumption = !precondition.has_value() ? assumptions :
+        !assumptions.has_value() ? precondition : precondition.value() && assumptions.value();
+    if (assumption.has_value()) {
+        if (parent_assumption.has_value()) {
+            return assumption.value() && parent_assumption.value();
+        }
+        return assumption;
+    }
+    return parent_assumption;
+}
+
+z3::check_result clsma::block::check(const z3::expr& assumption) const {
+    auto env = get_assumption();
+    z3::expr to_check = env.has_value() ? env.value() && assumption : assumption;
+    return ctx.solver.check(1, &to_check);
+}
+
+clsma::value_reference* clsma::block::get(const std::string& unique_id) {
+    return const_cast<clsma::value_reference*>(const_cast<const block*>(this)->get(unique_id));
+}
+
+const clsma::value_reference* clsma::block::get(const std::string& unique_id) const {
+    if (const auto& it = variables.find(unique_id); it != variables.end()) {
+        return it->second.get();
+    }
+    return parent ? parent->get(unique_id) : nullptr;
+}
+
+clsma::value_reference* clsma::block::set(const std::string& unique_id, const clsma::optional_value& value) {
+    auto* value_ref = get(unique_id);
+    if (!value_ref) {
+        throw std::invalid_argument("trying to assign a value to an inexistent value reference");
+    }
+    value_set(value_ref, value);
+    return value_ref;
+}
+
+clsma::block_context::block_context(z3::solver& solver) : solver(solver), z3(solver.ctx()) {}
+
+clsma::block* clsma::block_context::make_block() {
+    block block(*this);
+    return &blocks.emplace(block.id, std::move(block)).first->second;
+}
+
+clsma::block* clsma::block_context::make_block(clsma::block* parent, std::optional <z3::expr> precondition) {
+    block block(parent, std::move(precondition));
+    class block* ptr = &blocks.emplace(block.id, std::move(block)).first->second;
+    parent->children.emplace_back(ptr);
+    if (ptr->precondition.has_value()) {
+        parent->forks.emplace_back(ptr);
+    }
+    return ptr;
+}
+
+uint64_t clsma::block_context::allocate(uint64_t size) {
+    const uint64_t ptr = mem_ptr;
+    mem_ptr += size;
+    return ptr;
+}
