@@ -368,8 +368,8 @@ clsa::optional_value clsa::ast_visitor::transform_expr(clsa::block* block, const
 
 clsa::optional_value clsa::ast_visitor::transform_array_subscript_expr(clsa::block* block,
                                                                        const clang::ArraySubscriptExpr* array_subscript_expr) {
-    auto lhs = transform_expr(block, array_subscript_expr->getBase());
-    auto rhs = transform_expr(block, array_subscript_expr->getIdx());
+    auto&& lhs = transform_expr(block, array_subscript_expr->getBase());
+    auto&& rhs = transform_expr(block, array_subscript_expr->getIdx());
     if (!lhs.has_value() || !rhs.has_value()) {
         return {};
     }
@@ -383,68 +383,82 @@ clsa::optional_value clsa::ast_visitor::transform_array_subscript_expr(clsa::blo
 
 clsa::optional_value clsa::ast_visitor::transform_binary_operator(clsa::block* block,
                                                                   const clang::BinaryOperator* binary_operator) {
-    switch (binary_operator->getOpcode()) {
-        case clang::BO_Assign: {
-            //std::optional<z3::expr> lhs = transform_expr(block, binary_operator->getLHS());
-            auto rhs = transform_expr(block, binary_operator->getRHS());
-            //if (lhs.has_value() && rhs.has_value()) {
-            //checker.check_memory_access(checker.read, rhs.optional_value());
-            //checker.check_memory_access(checker.write, lhs.optional_value());
-            //write(block, binary_operator->getLHS(), lhs.optional_value(), read(block, binary_operator->getRHS(), rhs.optional_value()));
-            //ctx.mem.write_meta(META_BASE, lhs.optional_value(), ctx.mem.read_meta(META_BASE, rhs.optional_value(), ctx.z3.int_sort()));
-            //ctx.mem.write_meta(META_SIZE, lhs.optional_value(), ctx.mem.read_meta(META_SIZE, rhs.optional_value(), ctx.z3.int_sort()));
-            //solver.add(lhs.optional_value() == rhs.optional_value());
-            //}
-            assign(block, binary_operator->getLHS(), rhs);
-            //const auto lhs_address = get_address(block, binary_operator->getLHS());
-            //const auto rhs_address = get_address(block, binary_operator->getRHS());
-            //if (lhs_address.has_value() && rhs_address.has_value()) {
-            //    ctx.solver.add(lhs_address.optional_value() == rhs_address.optional_value());
-            //}
-            return rhs;
-            //return lhs; // memory-core
-        }
-        case clang::BO_Add: {
-            auto lhs = transform_expr(block, binary_operator->getLHS());
-            auto rhs = transform_expr(block, binary_operator->getRHS());
-            if (!lhs.has_value() || !rhs.has_value()) {
-                return {};
+    auto&& lhs = transform_expr(block, binary_operator->getLHS());
+    auto&& rhs = transform_expr(block, binary_operator->getRHS());
+    clsa::optional_value value;
+    if (lhs.has_value() && rhs.has_value()) {
+        switch (binary_operator->getOpcode()) {
+            case clang::BO_Assign:
+            case clang::BO_Comma: {
+                value = rhs;
+                break;
             }
-            return lhs.value() + rhs.value();
-            //return push(read(block, binary_operator->getLHS(), lhs.optional_value()) + read(block, binary_operator->getRHS(), rhs.optional_value()));
-        }
-        case clang::BO_Sub: {
-            auto lhs = transform_expr(block, binary_operator->getLHS());
-            auto rhs = transform_expr(block, binary_operator->getRHS());
-            if (!lhs.has_value() || !rhs.has_value()) {
-                return {};
+            case clang::BO_Add:
+            case clang::BO_AddAssign: {
+                value = lhs.value() + rhs.value();
+                break;
             }
-            return lhs.value() - rhs.value();
-            //const z3::expr result = ctx.z3.int_val(ctx.mem.allocate(1));
-            //ctx.mem.write(result, ctx.mem.read(lhs.optional_value(), ctx.z3.int_sort()) - ctx.mem.read(rhs.optional_value(), ctx.z3.int_sort()));
-            //return result;
-        }
-        case clang::BO_LT: {
-            auto lhs = transform_expr(block, binary_operator->getLHS());
-            auto rhs = transform_expr(block, binary_operator->getRHS());
-            if (!lhs.has_value() || !rhs.has_value()) {
-                return {};
+            case clang::BO_Sub:
+            case clang::BO_SubAssign: {
+                value = lhs.value() - rhs.value();
+                break;
             }
-            return lhs.value() < rhs.value();
-        }
-        case clang::BO_EQ: {
-            auto lhs = transform_expr(block, binary_operator->getLHS());
-            auto rhs = transform_expr(block, binary_operator->getRHS());
-            if (!lhs.has_value() || !rhs.has_value()) {
-                return {};
+            case clang::BO_Mul:
+            case clang::BO_MulAssign: {
+                value = lhs.value() * rhs.value();
+                break;
             }
-            return lhs.value() == rhs.value();
-        }
-        default: {
-            std::cout << "WARN: unknown BO opcode: " << binary_operator->getOpcodeStr().str() << std::endl;
-            return {};
+            case clang::BO_Div:
+            case clang::BO_DivAssign: {
+                value = lhs.value() / rhs.value();
+                break;
+            }
+            case clang::BO_Rem:
+            case clang::BO_RemAssign: {
+                value = lhs.value() % rhs.value();
+                break;
+            }
+            case clang::BO_LAnd: {
+                value = lhs.value() && rhs.value();
+                break;
+            }
+            case clang::BO_LOr: {
+                value = lhs.value() || rhs.value();
+                break;
+            }
+            case clang::BO_EQ: {
+                value = lhs.value() == rhs.value();
+                break;
+            }
+            case clang::BO_GE: {
+                value = lhs.value() >= rhs.value();
+                break;
+            }
+            case clang::BO_GT: {
+                value = lhs.value() > rhs.value();
+                break;
+            }
+            case clang::BO_LE: {
+                value = lhs.value() <= rhs.value();
+                break;
+            }
+            case clang::BO_LT: {
+                value = lhs.value() < rhs.value();
+                break;
+            }
+            case clang::BO_NE: {
+                value = lhs.value() != rhs.value();
+                break;
+            }
+            default: {
+                break;
+            }
         }
     }
+    if (binary_operator->isAssignmentOp()) {
+        assign(block, binary_operator->getLHS(), value);
+    }
+    return value;
 }
 
 clsa::optional_value clsa::ast_visitor::transform_call_expr(clsa::block* block, const clang::CallExpr* call_expr) {
@@ -507,6 +521,7 @@ clsa::optional_value clsa::ast_visitor::transform_unary_operator(clsa::block* bl
     if (!sub_expr.has_value()) {
         return {};
     }
+    const z3::expr& sub_expr_value = sub_expr.value();
     switch (unary_operator->getOpcode()) {
         case clang::UO_AddrOf: {
             return {};
@@ -518,17 +533,51 @@ clsa::optional_value clsa::ast_visitor::transform_unary_operator(clsa::block* bl
             }
             return {};
         }
-        case clang::UO_PreInc: {
-            sub_expr.set_value(sub_expr.value() + 1);
-            assign(block, unary_operator->getSubExpr(), sub_expr);
+        case clang::UO_LNot: {
+            if (sub_expr_value.is_bool()) {
+                return !sub_expr_value;
+            }
+            return sub_expr_value == 0;
+        }
+        case clang::UO_Minus: {
+            if (sub_expr_value.is_bool()) {
+                return z3::ite(sub_expr_value, ctx.z3.int_val(-1), ctx.z3.int_val(0));
+            }
+            return -sub_expr_value;
+        }
+        case clang::UO_Not: {
+            if (sub_expr_value.is_bool()) {
+                return z3::ite(sub_expr_value, ctx.z3.int_val(0), ctx.z3.int_val(1));
+            }
+            const clang::QualType sub_expr_type = unary_operator->getSubExpr()->getType();
+            return z3::bv2int(~z3::int2bv(ctx.ast.getTypeSize(sub_expr_type), sub_expr_value),
+                sub_expr_type->isSignedIntegerType());
+        }
+        case clang::UO_Plus: {
+            if (sub_expr_value.is_bool()) {
+                return z3::ite(sub_expr_value, ctx.z3.int_val(1), ctx.z3.int_val(0));
+            }
+            return sub_expr_value;
+        }
+        case clang::UO_PostDec: {
+            assign(block, unary_operator->getSubExpr(), sub_expr.map_value([](auto value) { return value - 1; }));
             return sub_expr;
         }
         case clang::UO_PostInc: {
             assign(block, unary_operator->getSubExpr(), sub_expr.map_value([](auto value) { return value + 1; }));
             return sub_expr;
         }
+        case clang::UO_PreDec: {
+            sub_expr.set_value(sub_expr.value() - 1);
+            assign(block, unary_operator->getSubExpr(), sub_expr);
+            return sub_expr;
+        }
+        case clang::UO_PreInc: {
+            sub_expr.set_value(sub_expr.value() + 1);
+            assign(block, unary_operator->getSubExpr(), sub_expr);
+            return sub_expr;
+        }
         default: {
-            std::cout << "WARN: unknown UO opcode: " << unary_operator->getOpcode() << std::endl;
             return {};
         }
     }
