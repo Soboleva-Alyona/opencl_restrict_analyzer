@@ -2,10 +2,10 @@
 
 #include "../core/ast_visitor.h"
 
-std::optional<clsa::violation> clsa::address_checker::check_memory_access(const clsa::block* block,
-                                                                            const clang::Expr* expr,
-                                                                            clsa::memory_access_type access_type,
-                                                                            const z3::expr& address) {
+std::optional<clsa::violation> clsa::address_checker::check_memory_access(const clsa::block* const block,
+                                                                          const clang::Expr* const expr,
+                                                                          const clsa::memory_access_type access_type,
+                                                                          const z3::expr& address) {
     const clsa::variable* var = block->var_get(get_pointer_decl(expr));
     if (nullptr == var) {
         return std::nullopt;

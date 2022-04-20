@@ -42,9 +42,9 @@ clsa::analyzer::analyzer(std::string_view filename) : compiler_instance() {
 }
 
 void clsa::analyzer::analyze(std::uint32_t checks, std::string_view kernel_name, std::uint32_t work_dim,
-                              const std::size_t* global_work_size, const std::size_t* local_work_size,
-                              std::size_t args_count, const std::size_t* arg_sizes, void** arg_values,
-                              const clsa::analyzer_options& options) {
+                             const std::size_t* global_work_size, const std::size_t* local_work_size,
+                             std::size_t args_count, const std::size_t* arg_sizes, void** arg_values,
+                             const clsa::analyzer_options& options) {
     std::vector<std::pair<size_t, void*>> args;
     args.reserve(args_count);
     for (size_t i = 0; i < args_count; ++i) {

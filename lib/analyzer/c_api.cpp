@@ -16,11 +16,11 @@ struct clsa_kernel_args {
 };
 
 extern "C" {
-    clsa_context* clsa_create_context() {
-        return new clsa_context();
-    }
+clsa_context* clsa_create_context() {
+    return new clsa_context();
+}
 
-    void clsa_delete_context(clsa_context* context) {
-        delete context;
-    }
+void clsa_delete_context(clsa_context* context) {
+    delete context;
+}
 }

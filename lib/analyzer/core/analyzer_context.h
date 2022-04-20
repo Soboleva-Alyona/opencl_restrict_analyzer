@@ -14,6 +14,7 @@ namespace clsa {
 
     class analyzer_context {
         friend class clsa::ast_visitor;
+
     public:
         analyzer_context(const clsa::analyzer_parameters& parameters, clang::ASTContext& ast_ctx);
 

@@ -16,6 +16,7 @@ namespace clsa {
                               std::function<void(clsa::ast_consumer&, clsa::analyzer_context&)> initializer);
 
         void Initialize(clang::ASTContext& ctx) override;
+
         void HandleTranslationUnit(clang::ASTContext& ctx) override;
 
         void set_violation_handler(std::function<void(clsa::violation)> handler);

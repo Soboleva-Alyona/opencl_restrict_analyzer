@@ -33,7 +33,7 @@ namespace {
 }
 
 clsa::value_reference::value_reference(const clsa::block* block, std::string unique_id, std::string name,
-                                        const z3::sort& sort)
+                                       const z3::sort& sort)
     : block(block), unique_id(std::move(unique_id)), name(std::move(name)), sort(sort) {}
 
 clsa::variable* clsa::value_reference::as_variable() {
@@ -61,16 +61,15 @@ z3::expr clsa::value_reference::to_z3_expr(std::string_view key) const {
 }
 
 clsa::optional_value clsa::value_reference::to_value() const {
-    std::unordered_map <std::string, z3::expr> meta;
-    for (const auto& key: meta_keys) {
+    std::unordered_map<std::string, z3::expr> meta;
+    for (const auto& key : meta_keys) {
         meta.emplace(key, to_z3_expr(key));
     }
     return {to_z3_expr(), std::move(meta)};
 }
 
 clsa::variable::variable(const class block* block, const clang::VarDecl* decl, const clang::QualType& type,
-                          uint64_t size,
-                          uint64_t address)
+                         uint64_t size, uint64_t address)
     : value_reference(block, std::to_string(decl->getID()), decl->getName().str(), type_to_sort(block->ctx.z3, type)),
       decl(decl), type(type),
       size(size), address(address) {}
@@ -81,15 +80,15 @@ const clsa::variable* clsa::variable::as_variable() const {
 
 clsa::block::block(block_context& ctx) : ctx(ctx), id(ctx.next_id++), parent(nullptr) {}
 
-clsa::block::block(block* parent, std::optional <z3::expr> precondition) : ctx(parent->ctx), id(parent->ctx.next_id++),
-                                                                            parent(parent),
-                                                                            precondition(std::move(precondition)) {}
+clsa::block::block(block* parent, std::optional<z3::expr> precondition) : ctx(parent->ctx), id(parent->ctx.next_id++),
+                                                                          parent(parent),
+                                                                          precondition(std::move(precondition)) {}
 
 void clsa::block::join() {
-    std::unordered_map <std::string, clsa::optional_value> values;
-    std::optional <z3::expr> joined_assumption;
-    for (const block* fork: forks) {
-        for (const auto& unique_id: fork->forked_decl_ids) {
+    std::unordered_map<std::string, clsa::optional_value> values;
+    std::optional<z3::expr> joined_assumption;
+    for (const block* fork : forks) {
+        for (const auto& unique_id : fork->forked_decl_ids) {
             if (!values.count(unique_id)) {
                 values.emplace(unique_id, get(unique_id)->to_value());
             }
@@ -98,7 +97,7 @@ void clsa::block::join() {
             const auto& joined_value = optional_value.has_value() ? optional_value.value() : get(
                 unique_id)->to_z3_expr();
             optional_value.set_value(z3::ite(fork->precondition.value(), forked_optional_value.value(), joined_value));
-            for (const auto& [key, forked_meta]: forked_optional_value.metadata()) {
+            for (const auto& [key, forked_meta] : forked_optional_value.metadata()) {
                 const auto& meta = optional_value.metadata(key);
                 const auto& joined_meta = meta.has_value() ? meta.value() : get(unique_id)->to_z3_expr(key);
                 optional_value.set_metadata(key, z3::ite(fork->precondition.value(), forked_meta, joined_meta));
@@ -111,7 +110,7 @@ void clsa::block::join() {
                                                                : joined_assumption.value() && assumption;
         }
     }
-    for (const auto& [unique_id, value]: values) {
+    for (const auto& [unique_id, value] : values) {
         set(unique_id, value);
     }
     if (joined_assumption.has_value()) {
@@ -124,7 +123,7 @@ clsa::block* clsa::block::make_inner() {
     return ctx.make_block(this, std::nullopt);
 }
 
-clsa::block* clsa::block::make_inner(std::optional <z3::expr> precondition) {
+clsa::block* clsa::block::make_inner(std::optional<z3::expr> precondition) {
     return ctx.make_block(this, std::move(precondition));
 }
 
@@ -199,11 +198,10 @@ clsa::variable* clsa::block::var_decl(const clang::VarDecl* decl, const clsa::op
         return nullptr;
     }
     clsa::variable* retvar = variables.emplace(std::to_string(decl->getID()), std::unique_ptr<clsa::variable>(
-        new clsa::variable(this, decl, decl->getType(), 1, ctx.allocate(1))))
-            .first->second->as_variable();
+        new clsa::variable(this, decl, decl->getType(), 1, ctx.allocate(1)))).first->second->as_variable();
     if (value.has_value()) {
         ctx.solver.add(retvar->to_z3_expr() == value.value());
-        for (const auto& [key, meta]: value.metadata()) {
+        for (const auto& [key, meta] : value.metadata()) {
             ctx.solver.add(retvar->to_z3_expr(key) == meta);
             retvar->meta_keys.emplace(key);
         }
@@ -244,9 +242,9 @@ void clsa::block::assume(const z3::expr& assumption) {
     assumptions = assumptions.has_value() ? assumptions.value() && assumption : assumption;
 }
 
-std::optional <z3::expr> clsa::block::get_assumption() const {
-    std::optional <z3::expr> parent_assumption = parent ? parent->get_assumption() : std::nullopt;
-    std::optional <z3::expr> assumption = !precondition.has_value() ? assumptions :
+std::optional<z3::expr> clsa::block::get_assumption() const {
+    std::optional<z3::expr> parent_assumption = parent ? parent->get_assumption() : std::nullopt;
+    std::optional<z3::expr> assumption = !precondition.has_value() ? assumptions :
         !assumptions.has_value() ? precondition : precondition.value() && assumptions.value();
     if (assumption.has_value()) {
         if (parent_assumption.has_value()) {
@@ -290,7 +288,7 @@ clsa::block* clsa::block_context::make_block() {
     return &blocks.emplace(block.id, std::move(block)).first->second;
 }
 
-clsa::block* clsa::block_context::make_block(clsa::block* parent, std::optional <z3::expr> precondition) {
+clsa::block* clsa::block_context::make_block(clsa::block* parent, std::optional<z3::expr> precondition) {
     block block(parent, std::move(precondition));
     class block* ptr = &blocks.emplace(block.id, std::move(block)).first->second;
     parent->children.emplace_back(ptr);

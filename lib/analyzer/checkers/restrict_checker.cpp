@@ -12,21 +12,10 @@ namespace {
 }
 
 std::optional<clsa::violation> clsa::restrict_checker::check_memory_access(const clsa::block* const block,
-                                                                             const clang::Expr* const expr,
-                                                                             const clsa::memory_access_type access_type,
-                                                                             const z3::expr& address) {
-    const clang::ValueDecl* value_decl = nullptr;
-    if (clang::isa<clang::ArraySubscriptExpr>(expr)) {
-        const auto* array_subscript_expr = clang::cast<clang::ArraySubscriptExpr>(expr);
-        value_decl = get_value_decl(array_subscript_expr->getBase());
-    } else if (clang::isa<clang::UnaryOperator>(expr)) {
-        const auto* unary_operator = clang::cast<clang::UnaryOperator>(expr);
-        if (unary_operator->getOpcode() == clang::UO_Deref) {
-            value_decl = get_value_decl(unary_operator->getSubExpr());
-        }
-    } else if (clang::isa<clang::ImplicitCastExpr>(expr)) {
-        return check_memory_access(block, clang::cast<clang::ImplicitCastExpr>(expr)->getSubExpr(), access_type, address);
-    }
+                                                                           const clang::Expr* const expr,
+                                                                           const clsa::memory_access_type access_type,
+                                                                           const z3::expr& address) {
+    const clang::ValueDecl* value_decl = get_pointer_decl(expr);
     const clsa::variable* var = block->var_get(value_decl);
     if (nullptr == var) {
         return std::nullopt;
@@ -68,7 +57,8 @@ std::optional<clsa::violation> clsa::restrict_checker::check_memory_access(const
                 if (affected_block_assumption.has_value()) {
                     access_condition = access_condition && affected_block_assumption.value();
                 }
-                condition = z3::ite(access_condition, violation_access_idx == z3_ctx.int_val(uint64_t(other_accesses.size())), condition);
+                condition = z3::ite(access_condition,
+                    violation_access_idx == z3_ctx.int_val(uint64_t(other_accesses.size())), condition);
             }
         }
     }
@@ -80,7 +70,8 @@ std::optional<clsa::violation> clsa::restrict_checker::check_memory_access(const
 
             const std::int64_t var_value = result.value().eval(var->to_z3_expr()).get_numeral_int64();
             const std::int64_t address_value = result.value().eval(address).get_numeral_int64();
-            const std::int64_t other_var_address_value = result.value().eval(other_access_data->var->to_z3_expr()).get_numeral_int64();
+            const std::int64_t other_var_address_value = result.value().eval(
+                other_access_data->var->to_z3_expr()).get_numeral_int64();
 
             std::ostringstream message;
             message << operation_name << " through `" << var->decl->getName().str()

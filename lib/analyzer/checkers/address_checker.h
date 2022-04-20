@@ -10,9 +10,9 @@ namespace clsa {
     public:
         using abstract_checker::abstract_checker;
 
-        std::optional<clsa::violation> check_memory_access(const clsa::block *block, const clang::Expr *expr,
-                                                            clsa::memory_access_type access_type,
-                                                            const z3::expr &address) override;
+        std::optional<clsa::violation> check_memory_access(const clsa::block* block, const clang::Expr* expr,
+                                                           clsa::memory_access_type access_type,
+                                                           const z3::expr& address) override;
     };
 
 }

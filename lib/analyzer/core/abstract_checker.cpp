@@ -12,6 +12,7 @@ const clang::SourceManager& clsa::abstract_checker::get_source_manager() const {
 }
 
 const clang::ValueDecl* clsa::abstract_checker::get_value_decl(const clang::Expr* expr) {
+    expr = expr->IgnoreParenCasts();
     if (clang::isa<clang::DeclRefExpr>(expr)) {
         return clang::cast<clang::DeclRefExpr>(expr)->getDecl();
     } else if (clang::isa<clang::UnaryOperator>(expr)) {
@@ -32,15 +33,12 @@ const clang::ValueDecl* clsa::abstract_checker::get_value_decl(const clang::Expr
                 return get_value_decl(binary_operator->getRHS());
             }
         }
-    } else if (clang::isa<clang::ParenExpr>(expr)) {
-        return get_value_decl(clang::cast<clang::ParenExpr>(expr)->getSubExpr());
-    } else if (clang::isa<clang::ImplicitCastExpr>(expr)) {
-        return get_value_decl(clang::cast<clang::ImplicitCastExpr>(expr)->getSubExpr());
     }
     return nullptr;
 }
 
 const clang::ValueDecl* clsa::abstract_checker::get_pointer_decl(const clang::Expr* expr) {
+    expr = expr->IgnoreParenCasts();
     if (clang::isa<clang::ArraySubscriptExpr>(expr)) {
         const auto* array_subscript_expr = clang::cast<clang::ArraySubscriptExpr>(expr);
         return get_value_decl(array_subscript_expr->getBase());
@@ -49,10 +47,6 @@ const clang::ValueDecl* clsa::abstract_checker::get_pointer_decl(const clang::Ex
         if (unary_operator->getOpcode() == clang::UO_Deref) {
             return get_value_decl(unary_operator->getSubExpr());
         }
-    } else if (clang::isa<clang::ParenExpr>(expr)) {
-        return get_pointer_decl(expr->IgnoreParens());
-    } else if (clang::isa<clang::ImplicitCastExpr>(expr)) {
-        return get_pointer_decl(expr->IgnoreImpCasts());
     }
     return nullptr;
 }

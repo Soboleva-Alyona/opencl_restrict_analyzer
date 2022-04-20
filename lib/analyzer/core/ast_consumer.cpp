@@ -4,8 +4,8 @@
 #include <utility>
 
 clsa::ast_consumer::ast_consumer(const clsa::analyzer_parameters& parameters,
-                                  std::function<void(clsa::ast_consumer&, clsa::analyzer_context&)> initializer)
-                                  : parameters(parameters), initializer(std::move(initializer)) {}
+                                 std::function<void(clsa::ast_consumer&, clsa::analyzer_context&)> initializer)
+    : parameters(parameters), initializer(std::move(initializer)) {}
 
 void clsa::ast_consumer::Initialize(clang::ASTContext& ast_ctx) {
     ctx.emplace(parameters, ast_ctx);
