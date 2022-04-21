@@ -6,7 +6,7 @@ It is based on parsing the program using Clang and converting into a formal repr
 ## Using the Command Line Tool
 
 You shall pass the path to the file with the OpenCL code (`--input`), the name of the kernel function (`--kernel`) and its arguments to the tool, as well as specify the checks to perform.
-Currently there are two checks available: `--check-address` and `--check-restrict`. You must specify at least one check for the tool to run.
+Currently, there are two checks available: `--check-address` and `--check-restrict`. You must specify at least one check for the tool to run.
 
 ### Passing arguments
 
