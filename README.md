@@ -1,15 +1,44 @@
-Building
+# OpenCL Static Analyzer
 
-You'll need at least LLVM 12.
+## Using the Command Line Tool
+
+You shall pass the path to the file with the OpenCL code (`--input`), the name of the kernel function (`--kernel`) and its arguments to the tool, as well as specify the checks to perform.
+Currently there are two checks available: `--check-address` and `--check-restrict`. You must specify at least one check for the tool to run.
+
+### Passing arguments
+
+You must specify the number of dimensions using `--work-dim`.
+
+You must specify the numbers of global work-items using `--global-work-size`, one time for each dimension.
+
+You can specify the sizes of work-groups using `--local-work-size`, one time for each dimension.
+
+You should pass kernel arguments in the same order as they declared in the kernel function using the repeatable `--arg` argument.
+
+You can pass integer or buffer arguments, as well as skip arguments using `undefined`.
+It is strictly recommended to pass all arguments possible.
+
+Integer arguments are passed as numbers followed by an optional postfix that describes their type.
+Supported postfixes are `i8`, (`int8_t`), `u8` (`uint8_t`), `i16`, (`int16_t`), `u16` (`uint16_t`),
+`i32`, (`int32_t`), `u32` (`uint32_t`), `i64`, (`int64_t`), `u64` (`uint64_t`). The default one is `i64`.
+
+Buffer arguments are passed as `b` followed by their size in bytes. Their contents are not provided.
+
+### Example
+
+`clsa --input src\test.cl --kernel vecadd --work-dim 2 --global-work-size 16 --global-work-size 32 --local-work-size 1 --local-work-size 2 --arg b16 --arg undefined --arg 10u16`
+
+## Building
+
+You'll need to install the following packages and their dependencies:
+ - `llvm-12`
+ - `clang-12`
+ - `libclang-12-dev`
+ - `oclicd-opencl-dev`
+
+The whole project can be built as the command line tool, while the contents of the `lib` folder can also be built as a shared library (`so`/`dll`).
+To build the command line tool you can use the bundled `CMake` file.
+
+## In-Depth Description
 
 
-final:
-
-llvm-12
-clang-12
-libclang-12-dev
-ocl-icd-opencl-dev
-
-
-llvm-12 llvm-12-dev clang-12 llvm-12-tools
-libclang-12-dev

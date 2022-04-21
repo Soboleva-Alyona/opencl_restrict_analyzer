@@ -44,7 +44,7 @@ llvm::cl::list<std::size_t> local_work_size(llvm::cl::cat(option_category), "loc
 
 llvm::cl::list<std::string> args(llvm::cl::cat(option_category), "arg", llvm::cl::ZeroOrMore,
     llvm::cl::desc("Arguments passed to the kernel. You can skip an argument specifying it as 'undefined'. "
-                   "Only boolean, integer and buffer arguments are supported. Rest must be undefined. "
+                   "Only integer and buffer arguments are supported. Rest must be undefined. "
                    "Integer arguments can be postfixed with i<ulong> or u<ulong> to be interpreted"
                    "as a signed or an unsigned value of <ulong> bits. Default is i64."
                    "Buffer arguments must be specified as 'b<ulong>', with the number interpreted as size in bytes. "
@@ -101,10 +101,9 @@ int main(int argc, const char** argv) {
 
     for (auto&& arg : args) {
         std::smatch match;
-        if (arg == "true") {
-            emplace_value(arg_ptrs, arg_sizes, true);
-        } else if (arg == "false") {
-            emplace_value(arg_ptrs, arg_sizes, false);
+        if (arg == "undefined") {
+            arg_ptrs.emplace_back(nullptr);
+            arg_sizes.emplace_back(0);
         } else if (std::regex_match(arg, match, buffer_regex)) {
             arg_ptrs.emplace_back(clsa::pseudocl_create_buffer(std::stoull(match[1].str())), [](void* ptr) {
                 clsa::pseudocl_release_mem_object((clsa::pseudocl_mem) ptr);
