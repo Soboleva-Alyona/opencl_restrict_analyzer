@@ -16,12 +16,12 @@ std::optional<clsa::violation> clsa::address_checker::check_memory_access(const 
         const std::int64_t var_value = result.value().eval(var->to_z3_expr()).get_numeral_int64();
         const std::int64_t address_value = result->eval(address).get_numeral_int64();
         const std::int64_t base_address_value = result->eval(var->to_z3_expr(clsa::VAR_META_MEM_BASE)).get_numeral_int64();
-        const std::int64_t size_value = result->eval(var->to_z3_expr(clsa::VAR_META_MEM_SIZE)).get_numeral_int64();
+        const z3::expr size = result->eval(var->to_z3_expr(clsa::VAR_META_MEM_SIZE));
         std::ostringstream message;
         message << "access through `" << var->decl->getName().str() << "`"
                 << " (offset " << address_value - var_value << ") is out of bounds"
-                << " (ptr offset is " << var_value - base_address_value
-                << ", memory block size is " << size_value << ")" << std::endl;
+                << " (ptr offset is " << var_value - base_address_value << ", memory block size is "
+                << (size.is_numeral() ? std::to_string(size.get_numeral_int64()) : "unknown") << ")" << std::endl;
         return clsa::violation {
             .location = expr->getExprLoc(),
             .message = message.str()

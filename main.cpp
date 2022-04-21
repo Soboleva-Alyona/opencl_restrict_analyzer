@@ -1,56 +1,163 @@
-#include "clang/Frontend/FrontendActions.h"
-#include "clang/Tooling/CommonOptionsParser.h"
-#include "clang/Tooling/Tooling.h"
-#include "llvm/Support/CommandLine.h"
+#include <iostream>
+#include <regex>
+
+#include <clang/Frontend/FrontendActions.h>
+#include <clang/Tooling/Tooling.h>
+#include <llvm/Support/CommandLine.h>
 
 #include "lib/analyzer/core/analyzer_parameters.h"
 #include "lib/analyzer/core/pseudocl.h"
 #include "lib/analyzer/frontend/analyzer.h"
 
-using namespace clang::tooling;
+llvm::cl::OptionCategory option_category("Analyzer Options", "Options for controlling the analysis process.");
 
-// Apply a custom category to all command-line options so that they are the
-// only ones displayed.
-static llvm::cl::OptionCategory MyToolCategory("my-tool options");
+llvm::cl::opt<std::string> filename(llvm::cl::cat(option_category), "input", llvm::cl::Required,
+    llvm::cl::desc("The input file."));
 
-// CommonOptionsParser declares HelpMessage with a description of the common
-// command-line options related to the compilation database and input files.
-// It's nice to have this help message in all tools.
-static llvm::cl::extrahelp CommonHelp(CommonOptionsParser::HelpMessage);
+llvm::cl::opt<std::string> kernel_name(llvm::cl::cat(option_category), "kernel", llvm::cl::Required,
+    llvm::cl::desc("The name of the kernel to analyze."));
 
-// A help message for this specific tool can be added afterwards.
-static llvm::cl::extrahelp MoreHelp("\nMore help text...\n");
+enum checks {
+    address,
+    restrict
+};
 
-int main(int argc, const char **argv) {
-    clsa::analyzer analyzer("/mnt/d/Users/Rhaza/CLionProjects/opencl_restrict_analyzer/test/resources/test_simple.cl");
-    const size_t global_size = 16;
-    const size_t local_size = 1;
-    clsa::pseudocl_mem b1 = clsa::pseudocl_create_buffer(64);
-    clsa::pseudocl_mem b2 = clsa::pseudocl_create_buffer(64);
-    clsa::pseudocl_mem b3 = clsa::pseudocl_create_buffer(64);
-    size_t arg_sizes[3] = { sizeof(clsa::pseudocl_mem), sizeof(clsa::pseudocl_mem), sizeof(clsa::pseudocl_mem) };
-    void* arg_values[3] = {&b1, &b2, &b3};
-    //try {
-        analyzer.analyze(clsa::analyzer::checks::address | clsa::analyzer::checks::restrict, "vecadd", 1, &global_size, &local_size, 3, arg_sizes, arg_values);
-    clsa::pseudocl_release_mem_object(b3);
-    clsa::pseudocl_release_mem_object(b2);
-    clsa::pseudocl_release_mem_object(b1);
-    //} catch (z3::exception& ex) {
-    //    std::cerr << "z3::exception: " << ex.what() << std::endl;
-    //}
-    /*auto ExpectedParser = CommonOptionsParser::create(argc, argv, MyToolCategory);
-    auto ast = clang::tooling::buildASTFromCode("__kernel void vecadd(__global int* a, __global int* b, __global int* c) {\n"
-                                                "    const int idx = get_global_id(0);\n"
-                                                "    c[idx] = a[idx] + b[idx];\n"
-                                                "}");
-    if (!ExpectedParser) {
-        // Fail gracefully for unsupported options.
-        llvm::errs() << ExpectedParser.takeError();
+llvm::cl::bits<clsa::analyzer::checks> checks(llvm::cl::cat(option_category), llvm::cl::desc("Available Checks:"),
+    llvm::cl::OneOrMore, llvm::cl::values(
+        clEnumValN(checks::address, "check-address", "Look for out of bounds memory accesses."),
+        clEnumValN(checks::restrict, "check-restrict", "Look for '__restrict' constraint violations.")));
+
+llvm::cl::opt<std::uint32_t> work_dim(llvm::cl::cat(option_category), "work-dim", llvm::cl::Required,
+    llvm::cl::desc("The number of dimensions used to specify the global work-items and work-items in the work-group. "
+                   "work-dim must be greater than zero and less than or equal to three."));
+
+llvm::cl::list<std::size_t> global_work_size(llvm::cl::cat(option_category), "global-work-size", llvm::cl::OneOrMore,
+    llvm::cl::desc("List of work-dim unsigned values that describe the number of global work-items in work-dim "
+                   "dimensions that will execute the kernel function. The total number of global work-items is "
+                   "computed as global-work-size[0] * ... * global-work-size[work-dim - 1]."));
+
+llvm::cl::list<std::size_t> local_work_size(llvm::cl::cat(option_category), "local-work-size", llvm::cl::ZeroOrMore,
+    llvm::cl::desc("List of work-dim unsigned values that describe the number of work-items that make up a work-group. "
+                   "The total number of work-items in a work-group is computed as local-work-size[0] * ... * "
+                   "local-work-size[work_dim - 1]. If it is not specified, the implementation will determine how to "
+                   "break the global work-items into appropriate work-group instances."));
+
+llvm::cl::list<std::string> args(llvm::cl::cat(option_category), "arg", llvm::cl::ZeroOrMore,
+    llvm::cl::desc("Arguments passed to the kernel. You can skip an argument specifying it as 'undefined'. "
+                   "Only boolean, integer and buffer arguments are supported. Rest must be undefined. "
+                   "Integer arguments can be postfixed with i<ulong> or u<ulong> to be interpreted"
+                   "as a signed or an unsigned value of <ulong> bits. Default is i64."
+                   "Buffer arguments must be specified as 'b<ulong>', with the number interpreted as size in bytes. "
+                   "Note: if you specify invalid arguments, the program may crash. Also, its strictly recommended "
+                   "to specify all buffer arguments - otherwise you may get weird results."));
+
+namespace {
+    template<typename T>
+    void emplace_value(std::vector<std::unique_ptr<void, std::function<void(void*)>>>& arg_ptrs,
+                       std::vector<size_t>& arg_sizes, const T& value) {
+        arg_ptrs.emplace_back(new T(value), [](void* ptr) {
+            delete (T*) ptr;
+        });
+        arg_sizes.emplace_back(sizeof(T));
+    }
+
+    template<typename T>
+    T parse(const std::string& input) {
+        T value;
+        std::istringstream(input) >> value;
+        return value;
+    }
+}
+
+int main(int argc, const char** argv) {
+    llvm::cl::HideUnrelatedOptions(option_category);
+    llvm::cl::ParseCommandLineOptions(argc, argv);
+
+    if (global_work_size.size() != work_dim) {
+        std::cerr << "global-work-size should be specified exactly `work-dim` times" << std::endl;
         return 1;
     }
-    CommonOptionsParser& OptionsParser = ExpectedParser.get();
-    ClangTool Tool(OptionsParser.getCompilations(),
-                   OptionsParser.getSourcePathList());
-    return Tool.run(newFrontendActionFactory<clang::SyntaxOnlyAction>().get());*/
+    if (!local_work_size.empty() && local_work_size.size() != work_dim) {
+        std::cerr << "local-work-size should be omitted or specified exactly `work-dim` times" << std::endl;
+        return 1;
+    }
+
+    uint32_t analyzer_checks = 0;
+    if (checks.isSet(checks::address)) {
+        analyzer_checks |= clsa::analyzer::checks::address;
+    }
+    if (checks.isSet(checks::restrict)) {
+        analyzer_checks |= clsa::analyzer::checks::restrict;
+    }
+
+    std::vector<std::size_t> global_sizes = global_work_size;
+    std::vector<std::size_t> local_sizes = local_work_size;
+
+    std::regex buffer_regex("^b(\\d+)$");
+    std::regex integer_regex("^(-?\\d+)((i|u)\\d+)?$");
+
+    std::vector<std::unique_ptr<void, std::function<void(void*)>>> arg_ptrs;
+    std::vector<size_t> arg_sizes;
+
+    for (auto&& arg : args) {
+        std::smatch match;
+        if (arg == "true") {
+            emplace_value(arg_ptrs, arg_sizes, true);
+        } else if (arg == "false") {
+            emplace_value(arg_ptrs, arg_sizes, false);
+        } else if (std::regex_match(arg, match, buffer_regex)) {
+            arg_ptrs.emplace_back(clsa::pseudocl_create_buffer(std::stoull(match[1].str())), [](void* ptr) {
+                clsa::pseudocl_release_mem_object((clsa::pseudocl_mem) ptr);
+            });
+            arg_sizes.emplace_back(sizeof(clsa::pseudocl_mem));
+        } else if (std::regex_match(arg, match, integer_regex)) {
+            std::string integer = match[1].str();
+            std::string type = match[2].str();
+            if (type.empty()) {
+                type = "i64";
+            }
+            if (type == "i8") {
+                emplace_value(arg_ptrs, arg_sizes, parse<int8_t>(integer));
+            } else if (type == "u8") {
+                emplace_value(arg_ptrs, arg_sizes, parse<uint8_t>(integer));
+            } else if (type == "i16") {
+                emplace_value(arg_ptrs, arg_sizes, parse<int16_t>(integer));
+            } else if (type == "u16") {
+                emplace_value(arg_ptrs, arg_sizes, parse<uint16_t>(integer));
+            } else if (type == "i32") {
+                emplace_value(arg_ptrs, arg_sizes, parse<int32_t>(integer));
+            } else if (type == "u32") {
+                emplace_value(arg_ptrs, arg_sizes, parse<uint32_t>(integer));
+            } else if (type == "i64") {
+                emplace_value(arg_ptrs, arg_sizes, parse<int64_t>(integer));
+            } else if (type == "u64") {
+                emplace_value(arg_ptrs, arg_sizes, parse<uint64_t>(integer));
+            } else {
+                std::cerr << "invalid integer type: " << type << std::endl;
+                return 1;
+            }
+        } else {
+            std::cerr << "invalid argument format: " << arg << std::endl;
+            return 1;
+        }
+    }
+
+    std::vector<void*> arg_pure_ptrs;
+    for (auto&& ptr : arg_ptrs) {
+        arg_pure_ptrs.emplace_back(ptr.get());
+    }
+
+    clsa::analyzer analyzer(filename);
+    try {
+        analyzer.set_violation_handler([](const clang::ASTContext& ctx, const clsa::violation& violation) {
+            std::cout << "violation at " << violation.location.printToString(ctx.getSourceManager())
+                      << ": " << violation.message;
+        });
+        analyzer.analyze(analyzer_checks, kernel_name, work_dim, global_sizes.data(),
+            local_sizes.empty() ? nullptr : local_sizes.data(), arg_sizes.size(), arg_sizes.data(), arg_pure_ptrs.data());
+    } catch (const std::exception& e) {
+        std::cerr << "an error occurred during analysis: " << e.what() << std::endl;
+    }
+
     return 0;
 }

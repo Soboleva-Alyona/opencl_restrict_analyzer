@@ -41,6 +41,10 @@ clsa::analyzer::analyzer(std::string_view filename) : compiler_instance() {
     source_manager.setMainFileID(source_manager.getOrCreateFileID(file_entry, clang::SrcMgr::C_System));
 }
 
+void clsa::analyzer::set_violation_handler(std::function<void(const clang::ASTContext&, const clsa::violation&)> handler) noexcept {
+    violation_handler = std::move(handler);
+}
+
 void clsa::analyzer::analyze(std::uint32_t checks, std::string_view kernel_name, std::uint32_t work_dim,
                              const std::size_t* global_work_size, const std::size_t* local_work_size,
                              std::size_t args_count, const std::size_t* arg_sizes, void** arg_values,
@@ -63,10 +67,11 @@ void clsa::analyzer::analyze(std::uint32_t checks, std::string_view kernel_name,
     compiler_instance.createPreprocessor(clang::TU_Complete);
     compiler_instance.createASTContext();
     compiler_instance.setASTConsumer(std::make_unique<ast_consumer>(analyzer_parameters,
-        [checks](clsa::ast_consumer& consumer, clsa::analyzer_context& ctx) -> void {
-            consumer.set_violation_handler([&ctx](const clsa::violation& violation) -> void {
-                std::cerr << "violation at " << violation.location.printToString(ctx.ast.getSourceManager())
-                          << ": " << violation.message;
+        [this, checks](clsa::ast_consumer& consumer, clsa::analyzer_context& ctx) -> void {
+            consumer.set_violation_handler([this, &ctx](const clsa::violation& violation) -> void {
+                if (violation_handler) {
+                    violation_handler(ctx.ast, violation);
+                }
             });
             if (checks & checks::address) {
                 consumer.add_checker(std::make_unique<clsa::address_checker>(ctx));

@@ -50,8 +50,7 @@ namespace clsa {
         friend class block;
 
     private:
-        variable(const clsa::block* block, const clang::VarDecl*, const clang::QualType& type, std::uint64_t size,
-                 std::uint64_t address);
+        variable(const clsa::block* block, const clang::VarDecl*, const clang::QualType& type);
 
     protected:
         [[nodiscard]] const clsa::variable* as_variable() const final;
@@ -59,8 +58,6 @@ namespace clsa {
     public:
         const clang::VarDecl* const decl;
         const clang::QualType type;
-        const std::uint64_t size;
-        const std::uint64_t address;
     };
 
     class block_context;

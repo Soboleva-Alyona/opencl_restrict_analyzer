@@ -90,10 +90,13 @@ bool clsa::ast_visitor::VisitFunctionDecl(clang::FunctionDecl* f) {
     }
 
     for (unsigned i = 0; i < f->getNumParams(); ++i) {
-        const auto& [size, data] = ctx.parameters.args[i];
         const clang::ParmVarDecl* decl = f->getParamDecl(i);
         const clang::QualType& type = decl->getType();
         const clsa::variable* var = kernel_block->var_decl(decl);
+        if (i >= ctx.parameters.args.size()) {
+            continue;
+        }
+        const auto& [size, data] = ctx.parameters.args[i];
         if (size != ctx.ast.getTypeSizeInChars(type).getQuantity()) {
             continue;
         }
@@ -117,7 +120,7 @@ bool clsa::ast_visitor::VisitFunctionDecl(clang::FunctionDecl* f) {
             }));
             if (ctx.parameters.options.array_values) {
                 for (uint64_t offset = 0; offset < array_size; ++offset) {
-                    global_block->write(ctx.z3.int_val(var->address + offset), ctx.z3.int_val(0));
+                    global_block->write(ctx.z3.int_val(base + offset), ctx.z3.int_val(0));
                 }
             }
         } else if (type->isIntegerType()) {

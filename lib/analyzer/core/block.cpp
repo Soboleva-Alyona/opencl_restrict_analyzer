@@ -68,11 +68,9 @@ clsa::optional_value clsa::value_reference::to_value() const {
     return {to_z3_expr(), std::move(meta)};
 }
 
-clsa::variable::variable(const class block* block, const clang::VarDecl* decl, const clang::QualType& type,
-                         uint64_t size, uint64_t address)
+clsa::variable::variable(const class block* block, const clang::VarDecl* decl, const clang::QualType& type)
     : value_reference(block, std::to_string(decl->getID()), decl->getName().str(), type_to_sort(block->ctx.z3, type)),
-      decl(decl), type(type),
-      size(size), address(address) {}
+      decl(decl), type(type) {}
 
 const clsa::variable* clsa::variable::as_variable() const {
     return this;
@@ -198,7 +196,7 @@ clsa::variable* clsa::block::var_decl(const clang::VarDecl* decl, const clsa::op
         return nullptr;
     }
     clsa::variable* retvar = variables.emplace(std::to_string(decl->getID()), std::unique_ptr<clsa::variable>(
-        new clsa::variable(this, decl, decl->getType(), 1, ctx.allocate(1)))).first->second->as_variable();
+        new clsa::variable(this, decl, decl->getType()))).first->second->as_variable();
     if (value.has_value()) {
         ctx.solver.add(retvar->to_z3_expr() == value.value());
         for (const auto& [key, meta] : value.metadata()) {
