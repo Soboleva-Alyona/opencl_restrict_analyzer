@@ -38,53 +38,53 @@ bool clsa::ast_visitor::VisitFunctionDecl(clang::FunctionDecl* f) {
 
         const bool is_uniform = is_local_size_specified && global_work_size % local_work_size == 0;
 
-        const auto& global_size = kernel_block->value_decl(id("global_size"), ctx.z3.int_sort());
-        kernel_block->assume(global_size->to_z3_expr() == ctx.z3.int_val(global_work_size));
+        const auto& global_size = global_block->value_decl(id("global_size"), ctx.z3.int_sort());
+        global_block->assume(global_size->to_z3_expr() == ctx.z3.int_val(global_work_size));
         global_sizes.push_back(global_size);
 
-        const auto& global_id = kernel_block->value_decl(id("global_id"), ctx.z3.int_sort());
-        kernel_block->assume(
+        const auto& global_id = global_block->value_decl(id("global_id"), ctx.z3.int_sort());
+        global_block->assume(
             global_id->to_z3_expr() >= 0 && global_id->to_z3_expr() < ctx.z3.int_val(global_work_size));
         global_ids.push_back(global_id);
 
-        const auto& local_size = kernel_block->value_decl(id("local_size"), ctx.z3.int_sort());
+        const auto& local_size = global_block->value_decl(id("local_size"), ctx.z3.int_sort());
         if (is_uniform) {
-            kernel_block->assume(local_size->to_z3_expr() == ctx.z3.int_val(local_work_size));
+            global_block->assume(local_size->to_z3_expr() == ctx.z3.int_val(local_work_size));
         } else {
-            kernel_block->assume(local_size->to_z3_expr() >= 1 && local_size->to_z3_expr() <= ctx.z3.int_val(
+            global_block->assume(local_size->to_z3_expr() >= 1 && local_size->to_z3_expr() <= ctx.z3.int_val(
                 is_local_size_specified ? local_work_size : global_work_size));
         }
         local_sizes.push_back(local_size);
 
-        const auto& enqueued_local_size = kernel_block->value_decl(id("enqueued_local_size"), ctx.z3.int_sort());
+        const auto& enqueued_local_size = global_block->value_decl(id("enqueued_local_size"), ctx.z3.int_sort());
         if (is_local_size_specified) {
-            kernel_block->assume(enqueued_local_size->to_z3_expr() == ctx.z3.int_val(local_work_size));
+            global_block->assume(enqueued_local_size->to_z3_expr() == ctx.z3.int_val(local_work_size));
         } else {
-            kernel_block->assume(enqueued_local_size->to_z3_expr() == local_size->to_z3_expr());
+            global_block->assume(enqueued_local_size->to_z3_expr() == local_size->to_z3_expr());
         }
         enqueued_local_sizes.push_back(enqueued_local_size);
 
-        const auto& local_id = kernel_block->value_decl(id("local_id"), ctx.z3.int_sort());
-        kernel_block->assume(local_id->to_z3_expr() >= 0 && local_id->to_z3_expr() < local_size->to_z3_expr());
+        const auto& local_id = global_block->value_decl(id("local_id"), ctx.z3.int_sort());
+        global_block->assume(local_id->to_z3_expr() >= 0 && local_id->to_z3_expr() < local_size->to_z3_expr());
         local_ids.push_back(local_id);
 
-        const auto& num_groups = kernel_block->value_decl(id("num_groups"), ctx.z3.int_sort());
-        kernel_block->assume(
+        const auto& num_groups = global_block->value_decl(id("num_groups"), ctx.z3.int_sort());
+        global_block->assume(
             num_groups->to_z3_expr() * local_size->to_z3_expr() > global_size->to_z3_expr() - local_size->to_z3_expr());
-        kernel_block->assume(
+        global_block->assume(
             num_groups->to_z3_expr() * local_size->to_z3_expr() < global_size->to_z3_expr() + local_size->to_z3_expr());
         group_nums.push_back(num_groups);
 
-        const auto& group_id = kernel_block->value_decl(id("group_id"), ctx.z3.int_sort());
-        kernel_block->assume(group_id->to_z3_expr() >= 0 && group_id->to_z3_expr() < num_groups->to_z3_expr());
+        const auto& group_id = global_block->value_decl(id("group_id"), ctx.z3.int_sort());
+        global_block->assume(group_id->to_z3_expr() >= 0 && group_id->to_z3_expr() < num_groups->to_z3_expr());
         group_ids.push_back(group_id);
 
-        const auto& global_offset = kernel_block->value_decl(id("global_offset"), ctx.z3.int_sort());
+        const auto& global_offset = global_block->value_decl(id("global_offset"), ctx.z3.int_sort());
         if (ctx.parameters.global_work_offset.has_value()) {
-            kernel_block->assume(
+            global_block->assume(
                 global_offset->to_z3_expr() == ctx.z3.int_val(uint64_t(ctx.parameters.global_work_offset.value()[i])));
         } else {
-            kernel_block->assume(global_offset->to_z3_expr() == 0);
+            global_block->assume(global_offset->to_z3_expr() == 0);
         }
         global_offsets.push_back(global_offset);
     }
@@ -160,7 +160,7 @@ bool clsa::ast_visitor::VisitFunctionDecl(clang::FunctionDecl* f) {
             kernel_block->var_set(decl, value);
         }
     }
-    process_stmt(kernel_block, f->getBody(), *kernel_block->value_decl("return", f->getReturnType()));
+    process_stmt(kernel_block, f->getBody(), *global_block->value_decl("return", f->getReturnType()));
 
     // TODO: remove for release
     for (const auto& assertion : ctx.solver.assertions()) {
@@ -491,7 +491,7 @@ clsa::optional_value clsa::ast_visitor::transform_call_expr(clsa::block* block, 
             return (this->*it->second)(args);
         }
     }
-    if (clang::isa<clang::FunctionDecl>(callee_decl)) {
+    if (clang::isa<clang::FunctionDecl>(callee_decl) && callee_decl->hasBody()) {
         if (func_stack_depth >= ctx.parameters.options.function_calls_depth_limit) {
             return {};
         }
@@ -503,7 +503,7 @@ clsa::optional_value clsa::ast_visitor::transform_call_expr(clsa::block* block, 
                 ctx.solver.add(var->to_z3_expr() == args[i].value());
             }
         }
-        auto* ret_ref = block->value_decl("return", function_decl->getReturnType());
+        auto* ret_ref = global_block->value_decl("return", function_decl->getReturnType());
         ++func_stack_depth;
         process_stmt(call_block, callee_decl->getBody(), *ret_ref);
         --func_stack_depth;

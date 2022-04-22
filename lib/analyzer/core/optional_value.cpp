@@ -9,6 +9,10 @@ clsa::optional_value::optional_value(std::optional<z3::expr> value) : optional_v
 clsa::optional_value::optional_value(std::optional<z3::expr> value, std::unordered_map<std::string, z3::expr> meta)
     : _value(std::move(value)), _metadata(std::move(meta)) {}
 
+clsa::optional_value::operator std::optional<z3::expr>() const {
+    return _value;
+}
+
 bool clsa::optional_value::has_value() const {
     return _value.has_value();
 }

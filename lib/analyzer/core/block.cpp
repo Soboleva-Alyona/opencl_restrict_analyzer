@@ -101,7 +101,7 @@ void clsa::block::join() {
                 optional_value.set_metadata(key, z3::ite(fork->precondition.value(), forked_meta, joined_meta));
             }
         }
-        const auto& forked_assumption = fork->get_assumption();
+        const auto& forked_assumption = fork->get_assumption(this);
         if (forked_assumption.has_value()) {
             const auto assumption = z3::implies(fork->precondition.value(), forked_assumption.value());
             joined_assumption = !joined_assumption.has_value() ? assumption
@@ -169,7 +169,29 @@ clsa::value_reference* clsa::block::value_decl(std::string name, const z3::sort&
         new clsa::value_reference(this, unique_id, unique_id, sort))).first->second.get();
 }
 
-void clsa::block::value_set(value_reference* value_ref, const optional_value& value) {
+namespace {
+    std::optional<z3::expr> get_assignment(const std::optional<z3::expr>& assumption, const z3::expr& value_ref,
+                                           const std::optional<z3::expr>& value,
+                                           const std::optional<z3::expr>& previous_value) {
+        if (value.has_value()) {
+            if (assumption.has_value()) {
+                if (previous_value.has_value()) {
+                    return value_ref == z3::ite(assumption.value(), value.value(), previous_value.value());
+                }
+                return z3::implies(assumption.value(), value_ref == value.value());
+            }
+            return value_ref == value.value();
+        }
+        if (assumption.has_value() && previous_value.has_value()) {
+            return z3::implies(!assumption.value(), value_ref == previous_value.value());
+        }
+        return std::nullopt;
+    }
+}
+
+void clsa::block::value_set(value_reference* value_ref, const clsa::optional_value& value) {
+    clsa::optional_value previous_value = value_ref->to_value();
+
     if (precondition.has_value() && value_ref->block != this) {
         forked_decl_ids.emplace(value_ref->unique_id);
         if (auto* var = value_ref->as_variable(); var != nullptr) {
@@ -182,12 +204,20 @@ void clsa::block::value_set(value_reference* value_ref, const optional_value& va
     } else {
         ++value_ref->version;
     }
-    if (value.has_value()) {
-        ctx.solver.add(value_ref->to_z3_expr() == value.value());
-        for (const auto& [key, meta] : value.metadata()) {
-            ctx.solver.add(value_ref->to_z3_expr(key) == meta);
-            value_ref->meta_keys.emplace(key);
+
+    std::optional<z3::expr> assumption = get_assumption(value_ref->block);
+
+    std::optional<z3::expr> assignment = get_assignment(assumption, value_ref->to_z3_expr(), value, previous_value);
+    if (assignment.has_value()) {
+        ctx.solver.add(assignment.value());
+    }
+    for (const auto& [key, meta] : value.metadata()) {
+        std::optional<z3::expr> meta_assignment = get_assignment(assumption, value_ref->to_z3_expr(key),
+            meta, previous_value.metadata(key));
+        if (meta_assignment.has_value()) {
+            ctx.solver.add(meta_assignment.value());
         }
+        value_ref->meta_keys.emplace(key);
     }
 }
 
@@ -240,10 +270,23 @@ void clsa::block::assume(const z3::expr& assumption) {
     assumptions = assumptions.has_value() ? assumptions.value() && assumption : assumption;
 }
 
+z3::check_result clsa::block::check(const z3::expr& assumption) const {
+    auto env = get_assumption();
+    z3::expr to_check = env.has_value() ? env.value() && assumption : assumption;
+    return ctx.solver.check(1, &to_check);
+}
+
 std::optional<z3::expr> clsa::block::get_assumption() const {
-    std::optional<z3::expr> parent_assumption = parent ? parent->get_assumption() : std::nullopt;
+    return get_assumption(nullptr);
+}
+
+std::optional<z3::expr> clsa::block::get_assumption(const clsa::block* up_to) const {
+    if (this == up_to) {
+        return std::nullopt;
+    }
+    std::optional<z3::expr> parent_assumption = parent ? parent->get_assumption(up_to) : std::nullopt;
     std::optional<z3::expr> assumption = !precondition.has_value() ? assumptions :
-        !assumptions.has_value() ? precondition : precondition.value() && assumptions.value();
+                                         !assumptions.has_value() ? precondition : precondition.value() && assumptions.value();
     if (assumption.has_value()) {
         if (parent_assumption.has_value()) {
             return assumption.value() && parent_assumption.value();
@@ -251,12 +294,6 @@ std::optional<z3::expr> clsa::block::get_assumption() const {
         return assumption;
     }
     return parent_assumption;
-}
-
-z3::check_result clsa::block::check(const z3::expr& assumption) const {
-    auto env = get_assumption();
-    z3::expr to_check = env.has_value() ? env.value() && assumption : assumption;
-    return ctx.solver.check(1, &to_check);
 }
 
 clsa::value_reference* clsa::block::get(const std::string& unique_id) {

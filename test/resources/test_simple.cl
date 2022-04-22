@@ -2,12 +2,21 @@ int myfunc(int a) {
     return a;
 }
 
+int abs(int x) {
+	if (x < 0) {
+		return -x;
+	}
+	return x;
+}
+
+
 __kernel void vecadd(__global int* __restrict a, __global int* __restrict b, __global int* c) {
     //const int idx = get_global_id(0);
     //const int* restrict p = &idx;
     //const int pidx = *p;
     //c[idx] = (a + 1)[pidx] + b[idx];
     //c[0] = (a + 1)[0] + b[0];
+    int d = abs(-1);
     b = c;
     int i = 0;//get_global_id(1);
     while (i < 15) {

@@ -109,23 +109,25 @@ namespace clsa {
 
         void assume(const z3::expr& assumption);
 
-        [[nodiscard]] std::optional<z3::expr> get_assumption() const;
-
         [[nodiscard]] z3::check_result check(const z3::expr& assumption) const;
+
+        [[nodiscard]] std::optional<z3::expr> get_assumption() const;
 
         clsa::block* const parent;
         const std::uint64_t id;
-    protected:
-        [[nodiscard]] clsa::value_reference* get(const std::string& unique_id);
-
-        [[nodiscard]] const clsa::value_reference* get(const std::string& unique_id) const;
-
-        clsa::value_reference* set(const std::string& unique_id, const clsa::optional_value& value);
 
     private:
         explicit block(clsa::block_context& ctx);
 
         block(clsa::block* parent, std::optional<z3::expr> precondition);
+
+        [[nodiscard]] std::optional<z3::expr> get_assumption(const clsa::block* up_to) const;
+
+        [[nodiscard]] clsa::value_reference* get(const std::string& unique_id);
+
+        [[nodiscard]] const clsa::value_reference* get(const std::string& unique_id) const;
+
+        clsa::value_reference* set(const std::string& unique_id, const clsa::optional_value& value);
 
         clsa::block_context& ctx;
 

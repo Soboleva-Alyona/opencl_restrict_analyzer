@@ -20,6 +20,8 @@ namespace clsa {
 
         optional_value(std::optional<z3::expr> value, std::unordered_map<std::string, z3::expr> metadata);
 
+        explicit(false) operator std::optional<z3::expr>() const;
+
         [[nodiscard]] bool has_value() const;
 
         [[nodiscard]] const z3::expr& value() const;
