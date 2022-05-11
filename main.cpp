@@ -24,7 +24,7 @@ enum checks {
 
 llvm::cl::bits<clsa::analyzer::checks> checks(llvm::cl::cat(option_category), llvm::cl::desc("Available Checks:"),
     llvm::cl::OneOrMore, llvm::cl::values(
-        clEnumValN(checks::address, "check-address", "Look for out of bounds memory accesses."),
+        clEnumValN(checks::address, "check-bounds", "Look for out of bounds memory accesses."),
         clEnumValN(checks::restrict, "check-restrict", "Look for '__restrict' constraint violations.")));
 
 llvm::cl::opt<std::uint32_t> work_dim(llvm::cl::cat(option_category), "work-dim", llvm::cl::Required,
@@ -43,8 +43,8 @@ llvm::cl::list<std::size_t> local_work_size(llvm::cl::cat(option_category), "loc
                    "break the global work-items into appropriate work-group instances."));
 
 llvm::cl::list<std::string> args(llvm::cl::cat(option_category), "arg", llvm::cl::ZeroOrMore,
-    llvm::cl::desc("Arguments passed to the kernel. You can skip an argument specifying it as 'undefined'. "
-                   "Only integer and buffer arguments are supported. Rest must be undefined. "
+    llvm::cl::desc("Arguments passed to the kernel. You can skip an argument specifying it as 'unknown'. "
+                   "Only integer and buffer arguments are supported. Rest must be unknown. "
                    "Integer arguments can be postfixed with i<ulong> or u<ulong> to be interpreted"
                    "as a signed or an unsigned value of <ulong> bits. Default is i64."
                    "Buffer arguments must be specified as 'b<ulong>', with the number interpreted as size in bytes. "
@@ -101,7 +101,7 @@ int main(int argc, const char** argv) {
 
     for (auto&& arg : args) {
         std::smatch match;
-        if (arg == "undefined") {
+        if (arg == "unknown") {
             arg_ptrs.emplace_back(nullptr);
             arg_sizes.emplace_back(0);
         } else if (std::regex_match(arg, match, buffer_regex)) {

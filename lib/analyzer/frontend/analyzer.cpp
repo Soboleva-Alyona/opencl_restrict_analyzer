@@ -11,7 +11,7 @@
 #include <llvm/Support/Host.h>
 
 #include "../core/ast_consumer.h"
-#include "../checkers/address_checker.h"
+#include "../checkers/bounds_checker.h"
 #include "../checkers/restrict_checker.h"
 
 clsa::analyzer::analyzer(std::string_view filename) : compiler_instance() {
@@ -74,7 +74,7 @@ void clsa::analyzer::analyze(std::uint32_t checks, std::string_view kernel_name,
                 }
             });
             if (checks & checks::address) {
-                consumer.add_checker(std::make_unique<clsa::address_checker>(ctx));
+                consumer.add_checker(std::make_unique<clsa::bounds_checker>(ctx));
             }
             if (checks & checks::restrict) {
                 consumer.add_checker(std::make_unique<clsa::restrict_checker>(ctx));

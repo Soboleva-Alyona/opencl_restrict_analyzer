@@ -6,7 +6,7 @@ It is based on parsing the program using Clang and converting into a formal repr
 ## Using the Command Line Tool
 
 You shall pass the path to the file with the OpenCL code (`--input`), the name of the kernel function (`--kernel`) and its arguments to the tool, as well as specify the checks to perform.
-Currently, there are two checks available: `--check-address` and `--check-restrict`. You must specify at least one check for the tool to run.
+Currently, there are two checks available: `--check-bounds` and `--check-restrict`. You must specify at least one check for the tool to run.
 
 ### Passing arguments
 
@@ -18,7 +18,7 @@ You can specify the sizes of work-groups using `--local-work-size`, one time for
 
 You should pass kernel arguments in the same order as they declared in the kernel function using the repeatable `--arg` argument.
 
-You can pass integer or buffer arguments, as well as skip arguments using `undefined`.
+You can pass integer or buffer arguments, as well as skip arguments using `unknown`.
 It is strictly recommended to pass all arguments possible.
 
 Integer arguments are passed as numbers followed by an optional postfix that describes their type.
@@ -29,7 +29,7 @@ Buffer arguments are passed as `b` followed by their size in bytes. Their conten
 
 ### Example
 
-`clsa --input src\test.cl --kernel vecadd --work-dim 2 --global-work-size 16 --global-work-size 32 --local-work-size 1 --local-work-size 2 --arg b16 --arg undefined --arg 10u16`
+`clsa --input src\test.cl --kernel vecadd --work-dim 2 --global-work-size 16 --global-work-size 32 --local-work-size 1 --local-work-size 2 --arg b16 --arg unknown --arg 10u16`
 
 ## Building
 
