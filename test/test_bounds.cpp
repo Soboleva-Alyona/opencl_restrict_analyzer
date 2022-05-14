@@ -24,3 +24,11 @@ TEST(TestBounds, NoViolationRelative) {
 TEST(TestBounds, ViolationRelative) {
     EXPECT_FALSE(analyze_bounds("test_violation_relative").empty());
 }
+
+TEST(TestBounds, ViolationInsideLoop) {
+    EXPECT_FALSE(analyze_bounds("test_violation_inside_loop").empty());
+}
+
+TEST(TestBounds, NoViolationInsideLoop) {
+    EXPECT_TRUE(analyze_bounds("test_no_violation_inside_loop").empty());
+}
