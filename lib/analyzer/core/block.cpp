@@ -86,24 +86,28 @@ void clsa::block::join() {
     std::unordered_map<std::string, clsa::optional_value> values;
     std::optional<z3::expr> joined_assumption;
     for (const block* fork : forks) {
-        for (const auto& unique_id : fork->forked_decl_ids) {
-            if (!values.count(unique_id)) {
-                values.emplace(unique_id, get(unique_id)->to_value());
-            }
-            const auto& forked_optional_value = fork->variables.at(unique_id)->to_value();
-            auto& optional_value = values.at(unique_id);
-            const auto& joined_value = optional_value.has_value() ? optional_value.value() : get(
-                unique_id)->to_z3_expr();
-            optional_value.set_value(z3::ite(fork->precondition.value(), forked_optional_value.value(), joined_value));
-            for (const auto& [key, forked_meta] : forked_optional_value.metadata()) {
-                const auto& meta = optional_value.metadata(key);
-                const auto& joined_meta = meta.has_value() ? meta.value() : get(unique_id)->to_z3_expr(key);
-                optional_value.set_metadata(key, z3::ite(fork->precondition.value(), forked_meta, joined_meta));
+        if (fork->precondition.has_value()) {
+            for (const auto& unique_id : fork->forked_decl_ids) {
+                if (!values.count(unique_id)) {
+                    values.emplace(unique_id, get(unique_id)->to_value());
+                }
+                const auto& forked_optional_value = fork->variables.at(unique_id)->to_value();
+                auto& optional_value = values.at(unique_id);
+                const auto& joined_value = optional_value.has_value() ? optional_value.value() : get(
+                    unique_id)->to_z3_expr();
+                optional_value.set_value(
+                    z3::ite(fork->precondition.value(), forked_optional_value.value(), joined_value));
+                for (const auto& [key, forked_meta] : forked_optional_value.metadata()) {
+                    const auto& meta = optional_value.metadata(key);
+                    const auto& joined_meta = meta.has_value() ? meta.value() : get(unique_id)->to_z3_expr(key);
+                    optional_value.set_metadata(key, z3::ite(fork->precondition.value(), forked_meta, joined_meta));
+                }
             }
         }
         const auto& forked_assumption = fork->get_assumption(this);
         if (forked_assumption.has_value()) {
-            const auto assumption = z3::implies(fork->precondition.value(), forked_assumption.value());
+            const auto assumption = fork->precondition.has_value() ?
+                z3::implies(fork->precondition.value(), forked_assumption.value()) : forked_assumption.value();
             joined_assumption = !joined_assumption.has_value() ? assumption
                                                                : joined_assumption.value() && assumption;
         }
@@ -327,9 +331,7 @@ clsa::block* clsa::block_context::make_block(clsa::block* parent, std::optional<
     block block(parent, std::move(precondition));
     class block* ptr = &blocks.emplace(block.id, std::move(block)).first->second;
     parent->children.emplace_back(ptr);
-    if (ptr->precondition.has_value()) {
-        parent->forks.emplace_back(ptr);
-    }
+    parent->forks.emplace_back(ptr);
     return ptr;
 }
 

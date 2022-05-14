@@ -1,0 +1,4 @@
+#pragma once
+
+static constexpr auto test_bounds_file_path = "@TEST_BOUNDS_FILE_PATH@";
+static constexpr auto test_restrict_file_path = "@TEST_RESTRICT_FILE_PATH@";

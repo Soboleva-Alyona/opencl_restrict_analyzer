@@ -15,7 +15,7 @@ namespace clsa {
     class analyzer {
     public:
         enum checks {
-            address = 1,
+            bounds = 1,
             restrict = 2,
         };
 

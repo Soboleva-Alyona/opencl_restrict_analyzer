@@ -73,7 +73,7 @@ void clsa::analyzer::analyze(std::uint32_t checks, std::string_view kernel_name,
                     violation_handler(ctx.ast, violation);
                 }
             });
-            if (checks & checks::address) {
+            if (checks & checks::bounds) {
                 consumer.add_checker(std::make_unique<clsa::bounds_checker>(ctx));
             }
             if (checks & checks::restrict) {

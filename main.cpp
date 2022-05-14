@@ -18,13 +18,13 @@ llvm::cl::opt<std::string> kernel_name(llvm::cl::cat(option_category), "kernel",
     llvm::cl::desc("The name of the kernel to analyze."));
 
 enum checks {
-    address,
+    bounds,
     restrict
 };
 
 llvm::cl::bits<clsa::analyzer::checks> checks(llvm::cl::cat(option_category), llvm::cl::desc("Available Checks:"),
     llvm::cl::OneOrMore, llvm::cl::values(
-        clEnumValN(checks::address, "check-bounds", "Look for out of bounds memory accesses."),
+        clEnumValN(checks::bounds, "check-bounds", "Look for out of bounds memory accesses."),
         clEnumValN(checks::restrict, "check-restrict", "Look for '__restrict' constraint violations.")));
 
 llvm::cl::opt<std::uint32_t> work_dim(llvm::cl::cat(option_category), "work-dim", llvm::cl::Required,
@@ -83,8 +83,8 @@ int main(int argc, const char** argv) {
     }
 
     uint32_t analyzer_checks = 0;
-    if (checks.isSet(checks::address)) {
-        analyzer_checks |= clsa::analyzer::checks::address;
+    if (checks.isSet(checks::bounds)) {
+        analyzer_checks |= clsa::analyzer::checks::bounds;
     }
     if (checks.isSet(checks::restrict)) {
         analyzer_checks |= clsa::analyzer::checks::restrict;
@@ -105,8 +105,9 @@ int main(int argc, const char** argv) {
             arg_ptrs.emplace_back(nullptr);
             arg_sizes.emplace_back(0);
         } else if (std::regex_match(arg, match, buffer_regex)) {
-            arg_ptrs.emplace_back(clsa::pseudocl_create_buffer(std::stoull(match[1].str())), [](void* ptr) {
-                clsa::pseudocl_release_mem_object((clsa::pseudocl_mem) ptr);
+            arg_ptrs.emplace_back(new clsa::pseudocl_mem(clsa::pseudocl_create_buffer(std::stoull(match[1].str()))), [](void* ptr) {
+                clsa::pseudocl_release_mem_object(*(clsa::pseudocl_mem*) ptr);
+                delete (clsa::pseudocl_mem*) ptr;
             });
             arg_sizes.emplace_back(sizeof(clsa::pseudocl_mem));
         } else if (std::regex_match(arg, match, integer_regex)) {

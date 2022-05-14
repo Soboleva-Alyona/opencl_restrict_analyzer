@@ -263,18 +263,18 @@ bool clsa::ast_visitor::process_for_stmt(clsa::block* block, const clang::ForStm
     for (int i = 0; i < ctx.parameters.options.loop_unwinding_iterations_limit; ++i) {
         std::optional<z3::expr> condition_expr;
         if (for_stmt->getCond() != nullptr) {
-            clsa::optional_value condition = transform_expr(block, for_stmt->getCond());
+            clsa::optional_value condition = transform_expr(for_block, for_stmt->getCond());
             condition_expr = condition.has_value() ? condition.value() : unknown(ctx.z3.bool_sort());
-            if (block->check(condition_expr.value()) != z3::sat) {
+            if (for_block->check(condition_expr.value()) != z3::sat) {
                 break;
             }
         }
-        clsa::block* body_block = block->make_inner(condition_expr);
+        clsa::block* body_block = for_block->make_inner(condition_expr);
         bool body_return = !process_stmt(body_block, for_stmt->getBody(), ret_ref);
-        block->join();
+        for_block->join();
         if (body_return) {
             if (condition_expr.has_value()) {
-                block->assume(!condition_expr.value());
+                for_block->assume(!condition_expr.value());
                 break;
             } else {
                 return false;
@@ -284,6 +284,7 @@ bool clsa::ast_visitor::process_for_stmt(clsa::block* block, const clang::ForStm
             transform_expr(for_block, for_stmt->getInc());
         }
     }
+    block->join();
     return true;
 }
 
