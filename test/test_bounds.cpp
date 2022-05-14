@@ -32,3 +32,23 @@ TEST(TestBounds, ViolationInsideLoop) {
 TEST(TestBounds, NoViolationInsideLoop) {
     EXPECT_TRUE(analyze_bounds("test_no_violation_inside_loop").empty());
 }
+
+TEST(TestBounds, NoViolationUnreachableStatement) {
+    EXPECT_TRUE(analyze_bounds("test_no_violation_unreachable_statement").empty());
+}
+
+TEST(TestBounds, ViolationInsideLoopInsideLoop) {
+    EXPECT_FALSE(analyze_bounds("test_violation_inside_loop_inside_loop").empty());
+}
+
+TEST(TestBounds, ViolationConditional) {
+    EXPECT_FALSE(analyze_bounds("test_violation_conditional").empty());
+}
+
+TEST(TestBounds, ViolationPointerArithmetic) {
+    EXPECT_FALSE(analyze_bounds("test_violation_pointer_arithmetic").empty());
+}
+
+TEST(TestBounds, NoViolationPointerArithmetic) {
+    EXPECT_TRUE(analyze_bounds("test_no_violation_pointer_arithmetic").empty());
+}

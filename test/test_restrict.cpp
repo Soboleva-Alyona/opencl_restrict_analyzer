@@ -44,3 +44,7 @@ TEST(TestRestrict, ViolationInsideLoop) {
 TEST(TestRestrict, NoViolationInsideLoopUnreachable) {
     EXPECT_TRUE(analyze_restrict("test_no_violation_inside_loop_unreachable").empty());
 }
+
+TEST(TestRestrict, ViolationDereference) {
+    EXPECT_FALSE(analyze_restrict("test_violation_dereference").empty());
+}

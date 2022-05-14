@@ -496,6 +496,11 @@ clsa::optional_value clsa::ast_visitor::transform_binary_operator(clsa::block* b
             }
         }
     }
+    if (type->isPointerType()) {
+        auto&& ptr = binary_operator->getLHS()->getType()->isPointerType() ? lhs : rhs;
+        value.set_metadata(clsa::VAR_META_MEM_BASE, ptr.metadata(clsa::VAR_META_MEM_BASE));
+        value.set_metadata(clsa::VAR_META_MEM_SIZE, ptr.metadata(clsa::VAR_META_MEM_SIZE));
+    }
     if (binary_operator->isAssignmentOp()) {
         assign(block, binary_operator->getLHS(), value);
     }
@@ -631,6 +636,18 @@ void clsa::ast_visitor::assign(clsa::block* block, const clang::Expr* lhs, const
         check_memory_access(block, lhs, clsa::memory_access_type::write, base.value() + idx.value());
         if (ctx.parameters.options.array_values && value.has_value()) {
             block->write(base.value() + idx.value(), value.value());
+        }
+    } else if (clang::isa<clang::UnaryOperator>(lhs)) {
+        const auto* unary_operator = clang::cast<clang::UnaryOperator>(lhs);
+        if (unary_operator->getOpcode() == clang::UO_Deref) {
+            const auto sub_expr = transform_expr(block, unary_operator->getSubExpr());
+            if (!sub_expr.has_value()) {
+                return;
+            }
+            check_memory_access(block, lhs, clsa::memory_access_type::write, sub_expr.value());
+            if (ctx.parameters.options.array_values && value.has_value()) {
+                block->write(sub_expr.value(), value.value());
+            }
         }
     } else if (clang::isa<clang::DeclRefExpr>(lhs)) {
         const auto* decl_ref_expr = clang::cast<clang::DeclRefExpr>(lhs);
