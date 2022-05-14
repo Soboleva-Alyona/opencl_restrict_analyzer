@@ -9,6 +9,31 @@
 
 #include "pseudocl.h"
 
+namespace {
+    z3::expr to_bool(z3::context& ctx, const z3::expr& expr) {
+        if (expr.get_sort().is_arith() || expr.get_sort().is_fpa()) {
+            return expr != ctx.num_val(0, expr.get_sort());
+        }
+        return expr;
+    }
+
+    z3::expr to_numeral(z3::context& ctx, const z3::expr& expr) {
+        if (expr.is_bool()) {
+            return z3::ite(expr, ctx.int_val(1), ctx.int_val(0));
+        }
+        return expr;
+    }
+
+    z3::expr cast(z3::context& ctx, const z3::expr& expr, const clang::QualType& type) {
+        if (type->isBooleanType() && (expr.is_arith() || expr.is_fpa())) {
+            return to_bool(ctx, expr);
+        } else if (type->isIntegerType() && expr.is_bool()) {
+            return to_numeral(ctx, expr);
+        }
+        return expr;
+    }
+}
+
 clsa::ast_visitor::ast_visitor(analyzer_context& ctx) : ctx(ctx) {
     global_block = ctx.block.make_block();
 }
@@ -213,7 +238,7 @@ bool clsa::ast_visitor::process_while_stmt(clsa::block* block, const clang::Whil
                                            clsa::value_reference& ret_ref) {
     for (int i = 0; i < ctx.parameters.options.loop_unwinding_iterations_limit; ++i) {
         clsa::optional_value condition = transform_expr(block, while_stmt->getCond());
-        z3::expr condition_expr = condition.has_value() ? condition.value() : unknown(ctx.z3.bool_sort());
+        z3::expr condition_expr = condition.has_value() ? to_bool(ctx.z3, condition.value()) : unknown(ctx.z3.bool_sort());
         if (block->check(condition_expr) != z3::sat) {
             break;
         }
@@ -246,7 +271,7 @@ bool clsa::ast_visitor::process_do_stmt(clsa::block* block, const clang::DoStmt*
             }
         }
         clsa::optional_value condition = transform_expr(block, do_stmt->getCond());
-        condition_expr = condition.has_value() ? condition.value() : unknown(ctx.z3.bool_sort());
+        condition_expr = condition.has_value() ? to_bool(ctx.z3, condition.value()) : unknown(ctx.z3.bool_sort());
         if (block->check(condition_expr.value()) != z3::sat) {
             break;
         }
@@ -264,7 +289,7 @@ bool clsa::ast_visitor::process_for_stmt(clsa::block* block, const clang::ForStm
         std::optional<z3::expr> condition_expr;
         if (for_stmt->getCond() != nullptr) {
             clsa::optional_value condition = transform_expr(for_block, for_stmt->getCond());
-            condition_expr = condition.has_value() ? condition.value() : unknown(ctx.z3.bool_sort());
+            condition_expr = condition.has_value() ? to_bool(ctx.z3, condition.value()) : unknown(ctx.z3.bool_sort());
             if (for_block->check(condition_expr.value()) != z3::sat) {
                 break;
             }
@@ -291,7 +316,7 @@ bool clsa::ast_visitor::process_for_stmt(clsa::block* block, const clang::ForStm
 bool clsa::ast_visitor::process_if_stmt(clsa::block* block, const clang::IfStmt* if_stmt,
                                         clsa::value_reference& ret_ref) {
     clsa::optional_value condition = transform_expr(block, if_stmt->getCond());
-    z3::expr condition_expr = condition.has_value() ? condition.value() : unknown(ctx.z3.bool_sort());
+    z3::expr condition_expr = condition.has_value() ? to_bool(ctx.z3, condition.value()) : unknown(ctx.z3.bool_sort());
     clsa::block* then_block = block->make_inner(condition_expr);
     bool then_return = !process_stmt(then_block, if_stmt->getThen(), ret_ref);
     bool else_return = false;
@@ -350,8 +375,10 @@ clsa::optional_value clsa::ast_visitor::transform_value_stmt(clsa::block* block,
 
 // https://clang.llvm.org/doxygen/classclang_1_1Expr.html
 clsa::optional_value clsa::ast_visitor::transform_expr(clsa::block* block, const clang::Expr* expr) {
-    expr = expr->IgnoreParenCasts();
-    if (clang::isa<clang::ArraySubscriptExpr>(expr)) {
+    expr = expr->IgnoreParens();
+    if (clang::isa<clang::CastExpr>(expr)) {
+        return transform_cast_expr(block, clang::cast<clang::CastExpr>(expr));
+    } else if (clang::isa<clang::ArraySubscriptExpr>(expr)) {
         return transform_array_subscript_expr(block, clang::cast<clang::ArraySubscriptExpr>(expr));
     } else if (clang::isa<clang::BinaryOperator>(expr)) {
         return transform_binary_operator(block, clang::cast<clang::BinaryOperator>(expr));
@@ -368,6 +395,15 @@ clsa::optional_value clsa::ast_visitor::transform_expr(clsa::block* block, const
     } else {
         return {};
     }
+}
+
+clsa::optional_value clsa::ast_visitor::transform_cast_expr(clsa::block* block, const clang::CastExpr* cast_expr) {
+    clsa::optional_value sub_expr = transform_expr(block, cast_expr->getSubExpr());
+    if (!sub_expr.has_value()) {
+        return {};
+    }
+    sub_expr.set_value(cast(ctx.z3, sub_expr.value(), cast_expr->getType()));
+    return sub_expr;
 }
 
 clsa::optional_value clsa::ast_visitor::transform_array_subscript_expr(clsa::block* block,
@@ -389,6 +425,7 @@ clsa::optional_value clsa::ast_visitor::transform_binary_operator(clsa::block* b
                                                                   const clang::BinaryOperator* binary_operator) {
     auto&& lhs = transform_expr(block, binary_operator->getLHS());
     auto&& rhs = transform_expr(block, binary_operator->getRHS());
+    const clang::QualType type = binary_operator->getType();
     clsa::optional_value value;
     if (lhs.has_value() && rhs.has_value()) {
         switch (binary_operator->getOpcode()) {
@@ -423,11 +460,11 @@ clsa::optional_value clsa::ast_visitor::transform_binary_operator(clsa::block* b
                 break;
             }
             case clang::BO_LAnd: {
-                value = lhs.value() && rhs.value();
+                value = cast(ctx.z3, to_bool(ctx.z3, lhs.value()) && to_bool(ctx.z3, rhs.value()), type);
                 break;
             }
             case clang::BO_LOr: {
-                value = lhs.value() || rhs.value();
+                value = cast(ctx.z3, to_bool(ctx.z3, lhs.value()) || to_bool(ctx.z3, rhs.value()), type);
                 break;
             }
             case clang::BO_EQ: {
@@ -435,19 +472,19 @@ clsa::optional_value clsa::ast_visitor::transform_binary_operator(clsa::block* b
                 break;
             }
             case clang::BO_GE: {
-                value = lhs.value() >= rhs.value();
+                value = to_numeral(ctx.z3, lhs.value()) >= to_numeral(ctx.z3, rhs.value());
                 break;
             }
             case clang::BO_GT: {
-                value = lhs.value() > rhs.value();
+                value = to_numeral(ctx.z3, lhs.value()) > to_numeral(ctx.z3, rhs.value());
                 break;
             }
             case clang::BO_LE: {
-                value = lhs.value() <= rhs.value();
+                value = to_numeral(ctx.z3, lhs.value()) <= to_numeral(ctx.z3, rhs.value());
                 break;
             }
             case clang::BO_LT: {
-                value = lhs.value() < rhs.value();
+                value = to_numeral(ctx.z3, lhs.value()) < to_numeral(ctx.z3, rhs.value());
                 break;
             }
             case clang::BO_NE: {
@@ -517,7 +554,7 @@ clsa::optional_value clsa::ast_visitor::transform_decl_ref_expr(clsa::block* blo
                                                                 const clang::DeclRefExpr* decl_ref_expr) {
     const clsa::variable* var = block->var_get(decl_ref_expr->getDecl());
     return var ? var->to_value() : clsa::optional_value();
-};
+}
 
 clsa::optional_value clsa::ast_visitor::transform_unary_operator(clsa::block* block,
                                                                  const clang::UnaryOperator* unary_operator) {
@@ -538,16 +575,10 @@ clsa::optional_value clsa::ast_visitor::transform_unary_operator(clsa::block* bl
             return {};
         }
         case clang::UO_LNot: {
-            if (sub_expr_value.is_bool()) {
-                return !sub_expr_value;
-            }
-            return sub_expr_value == 0;
+            return cast(ctx.z3, !to_bool(ctx.z3, sub_expr_value), unary_operator->getType());
         }
         case clang::UO_Minus: {
-            if (sub_expr_value.is_bool()) {
-                return z3::ite(sub_expr_value, ctx.z3.int_val(-1), ctx.z3.int_val(0));
-            }
-            return -sub_expr_value;
+            return -to_numeral(ctx.z3, sub_expr_value);
         }
         case clang::UO_Not: {
             if (sub_expr_value.is_bool()) {
@@ -558,10 +589,7 @@ clsa::optional_value clsa::ast_visitor::transform_unary_operator(clsa::block* bl
                 sub_expr_type->isSignedIntegerType());
         }
         case clang::UO_Plus: {
-            if (sub_expr_value.is_bool()) {
-                return z3::ite(sub_expr_value, ctx.z3.int_val(1), ctx.z3.int_val(0));
-            }
-            return sub_expr_value;
+            return to_numeral(ctx.z3, sub_expr_value);
         }
         case clang::UO_PostDec: {
             assign(block, unary_operator->getSubExpr(), sub_expr.map_value([](auto value) { return value - 1; }));

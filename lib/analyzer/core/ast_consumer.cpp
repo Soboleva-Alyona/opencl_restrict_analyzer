@@ -19,7 +19,11 @@ void clsa::ast_consumer::Initialize(clang::ASTContext& ast_ctx) {
 }
 
 void clsa::ast_consumer::HandleTranslationUnit(clang::ASTContext& ast_ctx) {
-    visitor->TraverseAST(ast_ctx);
+    try {
+        visitor->TraverseAST(ast_ctx);
+    } catch (const z3::exception& e) {
+        throw std::logic_error(std::string("Z3 error: ") + e.msg());
+    }
 }
 
 void clsa::ast_consumer::set_violation_handler(std::function<void(clsa::violation)> handler) {

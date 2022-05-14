@@ -52,6 +52,8 @@ namespace clsa {
 
         clsa::optional_value transform_expr(clsa::block* block, const clang::Expr* expr);
 
+        clsa::optional_value transform_cast_expr(clsa::block* block, const clang::CastExpr* cast_expr);
+
         clsa::optional_value transform_array_subscript_expr(clsa::block* block,
                                                             const clang::ArraySubscriptExpr* array_subscript_expr);
 
