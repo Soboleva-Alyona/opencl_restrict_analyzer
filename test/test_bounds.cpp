@@ -52,3 +52,11 @@ TEST(TestBounds, ViolationPointerArithmetic) {
 TEST(TestBounds, NoViolationPointerArithmetic) {
     EXPECT_TRUE(analyze_bounds("test_no_violation_pointer_arithmetic").empty());
 }
+
+TEST(TestBounds, NoViolationComplexConditionalReturn) {
+    EXPECT_TRUE(analyze_bounds("test_no_violation_complex_conditional_return").empty());
+}
+
+TEST(TestBounds, ViolationComplexConditionalReturn) {
+    EXPECT_FALSE(analyze_bounds("test_violation_complex_conditional_return").empty());
+}

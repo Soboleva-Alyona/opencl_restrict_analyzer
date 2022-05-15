@@ -63,3 +63,25 @@ __kernel void test_no_violation_pointer_arithmetic(__global int* a, __global int
     __global int* d = a + get_global_size(0);
     *(--d);
 }
+
+__kernel void test_no_violation_complex_conditional_return(__global int* a, __global int* b, __global int* c) {
+    int i = get_global_id(0);
+    while (true) {
+        if (i > (get_global_size(0) - 1) / 2) {
+            return;
+        }
+        break;
+    }
+    a[i + i] = b[i + i];
+}
+
+__kernel void test_violation_complex_conditional_return(__global int* a, __global int* b, __global int* c) {
+    int i = get_global_id(0);
+    while (true) {
+        if (i > get_global_size(0) / 2) {
+            return;
+        }
+        break;
+    }
+    a[i + i] = b[i + i];
+}
