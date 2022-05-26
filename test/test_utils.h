@@ -8,7 +8,7 @@
 #include "../lib/analyzer/core/pseudocl.h"
 #include "../lib/analyzer/core/violation.h"
 
-using pseudocl_mem_ptr = std::unique_ptr<clsa::pseudocl_mem, std::function<void(clsa::pseudocl_mem *)>>;
+using pseudocl_mem_ptr = std::unique_ptr<clsa::pseudocl_mem, std::function<void(clsa::pseudocl_mem*)>>;
 
 pseudocl_mem_ptr create_buffer_ptr(size_t size);
 
