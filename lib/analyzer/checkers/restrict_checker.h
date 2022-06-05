@@ -25,9 +25,7 @@ namespace clsa {
         static const char* get_access_name(const memory_access_data& access);
 
         std::unordered_map<const clsa::block*, std::vector<memory_access_data>> accesses = {};
-        std::unordered_map<const clsa::block*, std::vector<memory_access_data>> accesses_restrict = {};
         std::unordered_map<const clsa::block*, std::vector<memory_access_data>> writes = {};
-        std::unordered_map<const clsa::block*, std::vector<memory_access_data>> writes_restrict = {};
     };
 
 }

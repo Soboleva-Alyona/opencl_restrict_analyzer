@@ -27,45 +27,40 @@ std::optional<clsa::violation> clsa::restrict_checker::check_memory_access(const
     if (nullptr == var) {
         return std::nullopt;
     }
-    const bool is_restrict_qualified = value_decl->getType().isRestrictQualified();
     const auto access = memory_access_data {
         expr, access_type, address, var
     };
 
     accesses[block].emplace_back(access);
-    if (is_restrict_qualified) {
-        accesses_restrict[block].emplace_back(access);
-    }
     if (access_type == clsa::write) {
         writes[block].emplace_back(access);
-        if (is_restrict_qualified) {
-            writes_restrict[block].emplace_back(access);
-        }
     }
 
     std::vector<std::pair<const clsa::block*, const memory_access_data*>> other_accesses;
     {
-        std::unordered_set<const clsa::block*> parent_blocks;
-        for (auto cur_block = block; cur_block != nullptr; cur_block = cur_block->parent) {
-            parent_blocks.emplace(cur_block);
-        }
-        for (const auto& [other_block, other_block_accesses] : (access_type == clsa::write ? accesses_restrict
-                                                                                           : writes_restrict)) {
-            for (const auto& other_access : other_block_accesses) {
-                if (other_access.var != var && parent_blocks.contains(other_access.var->block)) {
-                    other_accesses.emplace_back(other_access.var->block, &other_access);
+        auto& other_accesses_by_block = access_type == clsa::write ? accesses : writes;
+        {
+            std::unordered_set<const clsa::block*> parent_blocks;
+            for (auto cur_block = block; cur_block != nullptr; cur_block = cur_block->parent) {
+                parent_blocks.emplace(cur_block);
+            }
+            for (const auto& [other_block, other_block_accesses] : other_accesses_by_block) {
+                for (const auto& other_access : other_block_accesses) {
+                    if (other_access.var != var && parent_blocks.contains(other_access.var->block) &&
+                        other_access.var->decl->getType().isRestrictQualified()) {
+                        other_accesses.emplace_back(other_access.var->block, &other_access);
+                    }
                 }
             }
         }
-    }
-    if (is_restrict_qualified) {
-        auto& other_accesses_by_block = access_type == clsa::write ? accesses : writes;
-        std::vector<const clsa::block*> other_blocks;
-        insert_inner_blocks(other_blocks, var->block);
-        for (const auto* other_block : other_blocks) {
-            for (const auto& other_access : other_accesses_by_block[other_block]) {
-                if (other_access.var != var) {
-                    other_accesses.emplace_back(other_block, &other_access);
+        if (value_decl->getType().isRestrictQualified()) {
+            std::vector<const clsa::block*> other_blocks;
+            insert_inner_blocks(other_blocks, var->block);
+            for (const auto* other_block : other_blocks) {
+                for (const auto& other_access : other_accesses_by_block[other_block]) {
+                    if (other_access.var != var) {
+                        other_accesses.emplace_back(other_block, &other_access);
+                    }
                 }
             }
         }
