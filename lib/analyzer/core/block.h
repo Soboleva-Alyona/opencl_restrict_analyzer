@@ -83,9 +83,9 @@ namespace clsa {
 
         void write(const z3::expr& address, const z3::expr& value);
 
-        [[nodiscard]] z3::expr read(const z3::expr& address, const clang::QualType& type);
+        [[nodiscard]] clsa::optional_value read(const z3::expr& address, const clang::QualType& type);
 
-        [[nodiscard]] z3::expr read(const z3::expr& address, const z3::sort& sort);
+        [[nodiscard]] clsa::optional_value read(const z3::expr& address, const z3::sort& sort);
 
         clsa::value_reference* value_decl(std::string name, const clang::QualType& type);
 

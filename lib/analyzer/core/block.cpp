@@ -2,7 +2,7 @@
 
 namespace {
     z3::sort type_to_sort(z3::context& z3_ctx, const clang::QualType& type) {
-        if (type->isIntegerType() || type->isPointerType()) {
+        if (type->isIntegerType() || type->isPointerType() || type->isArrayType()) {
             return z3_ctx.int_sort();
         } else if (type->isFloatingType()) {
             return z3_ctx.real_sort();
@@ -153,14 +153,18 @@ void clsa::block::write(const z3::expr& address, const z3::expr& value) {
     set(unique_id, z3::store(versioned_value->to_z3_expr(), address, value));
 }
 
-z3::expr clsa::block::read(const z3::expr& address, const clang::QualType& type) {
+clsa::optional_value clsa::block::read(const z3::expr& address, const clang::QualType& type) {
     return read(address, type_to_sort(ctx.z3, type));
 }
 
-z3::expr clsa::block::read(const z3::expr& address, const z3::sort& sort) {
+clsa::optional_value clsa::block::read(const z3::expr& address, const z3::sort& sort) {
     std::string unique_id;
     sort_to_id(sort, unique_id);
-    return z3::select(get(unique_id)->to_z3_expr(), address);
+    auto* versioned_value = get(unique_id);
+    if (versioned_value == nullptr) {
+        return {};
+    }
+    return z3::select(versioned_value->to_z3_expr(), address);
 }
 
 clsa::value_reference* clsa::block::value_decl(std::string name, const clang::QualType& type) {

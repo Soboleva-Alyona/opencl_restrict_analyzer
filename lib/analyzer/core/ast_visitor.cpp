@@ -361,8 +361,22 @@ void clsa::ast_visitor::process_decl(clsa::block* block, const clang::Decl* decl
 
 void clsa::ast_visitor::process_var_decl(clsa::block* block, const clang::VarDecl* var_decl,
                                          clsa::value_reference& ret_ref) {
-    block->var_decl(var_decl,
-        var_decl->hasInit() ? transform_expr(block, var_decl->getInit()) : clsa::optional_value());
+    if (var_decl->getType()->isConstantArrayType()) {
+        const uint64_t size = ctx.ast.getConstantArrayElementCount(ctx.ast.getAsConstantArrayType(var_decl->getType()));
+        const uint64_t base = ctx.block.allocate(size);
+        block->var_decl(var_decl, clsa::optional_value(ctx.z3.int_val(base), {
+            {clsa::VAR_META_MEM_BASE, ctx.z3.int_val(base)},
+            {clsa::VAR_META_MEM_SIZE, ctx.z3.int_val(size)}
+        }));
+        if (ctx.parameters.options.array_values) {
+            for (uint64_t offset = 0; offset < size; ++offset) {
+                global_block->write(ctx.z3.int_val(base + offset), ctx.z3.int_val(0)); // TODO: respect actual values
+            }
+        }
+    } else {
+        block->var_decl(var_decl,
+            var_decl->hasInit() ? transform_expr(block, var_decl->getInit()) : clsa::optional_value());
+    }
 }
 
 clsa::optional_value clsa::ast_visitor::transform_value_stmt(clsa::block* block, const clang::ValueStmt* value_stmt) {
@@ -423,11 +437,12 @@ clsa::optional_value clsa::ast_visitor::transform_array_subscript_expr(clsa::blo
 
 clsa::optional_value clsa::ast_visitor::transform_binary_operator(clsa::block* block,
                                                                   const clang::BinaryOperator* binary_operator) {
-    auto&& lhs = transform_expr(block, binary_operator->getLHS());
+    auto&& lhs = binary_operator->getOpcode() != clang::BO_Assign
+        ? transform_expr(block, binary_operator->getLHS()) : clsa::optional_value();
     auto&& rhs = transform_expr(block, binary_operator->getRHS());
     const clang::QualType type = binary_operator->getType();
     clsa::optional_value value;
-    if (lhs.has_value() && rhs.has_value()) {
+    if ((lhs.has_value() || binary_operator->getOpcode() == clang::BO_Assign) && rhs.has_value()) {
         switch (binary_operator->getOpcode()) {
             case clang::BO_Assign:
             case clang::BO_Comma: {

@@ -37,6 +37,8 @@ enable_testing()
 
 get_filename_component(TEST_BOUNDS_FILE_PATH test/resources/test_bounds.cl ABSOLUTE)
 get_filename_component(TEST_RESTRICT_FILE_PATH test/resources/test_restrict.cl ABSOLUTE)
+get_filename_component(TEST_ONE_DNN_FILE_PATH test/resources/test_one_dnn.cl ABSOLUTE)
+get_filename_component(TEST_PIPE_CNN_FILE_PATH test/resources/test_pipe_cnn.cl ABSOLUTE)
 configure_file(test/test_resources.h.in test_resources.h)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 

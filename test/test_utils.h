@@ -14,5 +14,9 @@ pseudocl_mem_ptr create_buffer_ptr(size_t size);
 
 std::vector<clsa::violation> analyze(std::string_view path, std::string_view kernel, std::uint32_t checks);
 
+std::vector<clsa::violation> analyze_one_dnn(std::string_view path, std::string_view kernel, std::uint32_t checks);
+
+std::vector<clsa::violation> analyze_pipe_cnn(std::string_view path, std::string_view kernel, std::uint32_t checks);
+
 
 #endif //OPENCL_RESTRICT_ANALYZER_TEST_UTILS_H

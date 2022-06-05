@@ -5,8 +5,12 @@
 
 #include "../lib/analyzer/frontend/analyzer.h"
 
+std::vector<clsa::violation> analyze_bounds(std::string_view file_path, std::string_view kernel) {
+    return analyze(file_path, kernel, clsa::analyzer::checks::bounds);
+}
+
 std::vector<clsa::violation> analyze_bounds(std::string_view kernel) {
-    return analyze(test_bounds_file_path, kernel, clsa::analyzer::checks::bounds);
+    return analyze_bounds(test_bounds_file_path, kernel);
 }
 
 TEST(TestBounds, NoViolationTrivial) {
@@ -59,4 +63,21 @@ TEST(TestBounds, NoViolationComplexConditionalReturn) {
 
 TEST(TestBounds, ViolationComplexConditionalReturn) {
     EXPECT_FALSE(analyze_bounds("test_violation_complex_conditional_return").empty());
+}
+
+TEST(TestBounds, PipeCNN_NoViolations) {
+    // There is a set of false positives caused by (float*) to (int*) cast, it is covered in the paper
+    EXPECT_EQ(analyze_pipe_cnn(test_pipe_cnn_file_path, "lrn", clsa::analyzer::checks::bounds).size(), 16);
+}
+
+TEST(TestBounds, PipeCNN_Violations) {
+    EXPECT_GT(analyze_pipe_cnn(test_pipe_cnn_file_path, "lrn_dirty", clsa::analyzer::checks::bounds).size(), 16);
+}
+
+TEST(TestBounds, oneDNN_NoViolations) {
+    EXPECT_TRUE(analyze_one_dnn(test_one_dnn_file_path, "generic_reorder", clsa::analyzer::checks::bounds).empty());
+}
+
+TEST(TestBounds, oneDNN_Violations) {
+    EXPECT_FALSE(analyze_one_dnn(test_one_dnn_file_path, "generic_reorder_dirty", clsa::analyzer::checks::bounds).empty());
 }

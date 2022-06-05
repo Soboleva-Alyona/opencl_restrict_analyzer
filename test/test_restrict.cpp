@@ -5,8 +5,12 @@
 
 #include "../lib/analyzer/frontend/analyzer.h"
 
+std::vector<clsa::violation> analyze_restrict(std::string_view file_path, std::string_view kernel) {
+    return analyze(file_path, kernel, clsa::analyzer::checks::restrict);
+}
+
 std::vector<clsa::violation> analyze_restrict(std::string_view kernel) {
-    return analyze(test_restrict_file_path, kernel, clsa::analyzer::checks::restrict);
+    return analyze_restrict(test_restrict_file_path, kernel);
 }
 
 TEST(TestRestrict, NoViolationTrivial) {
@@ -47,4 +51,20 @@ TEST(TestRestrict, NoViolationInsideLoopUnreachable) {
 
 TEST(TestRestrict, ViolationDereference) {
     EXPECT_FALSE(analyze_restrict("test_violation_dereference").empty());
+}
+
+TEST(TestRestrict, PipeCNN_NoViolations) {
+    EXPECT_TRUE(analyze_pipe_cnn(test_pipe_cnn_file_path, "lrn", clsa::analyzer::checks::restrict).empty());
+}
+
+TEST(TestRestrict, PipeCNN_Violations) {
+    EXPECT_FALSE(analyze_pipe_cnn(test_pipe_cnn_file_path, "lrn_dirty", clsa::analyzer::checks::restrict).empty());
+}
+
+TEST(TestRestrict, oneDNN_NoViolations) {
+    EXPECT_TRUE(analyze_one_dnn(test_one_dnn_file_path, "generic_reorder", clsa::analyzer::checks::restrict).empty());
+}
+
+TEST(TestRestrict, oneDNN_Violations) {
+    EXPECT_FALSE(analyze_one_dnn(test_one_dnn_file_path, "generic_reorder_dirty", clsa::analyzer::checks::restrict).empty());
 }

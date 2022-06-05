@@ -5,6 +5,7 @@
 #include <string_view>
 #include <unordered_set>
 
+#include <clang/AST/ASTContext.h>
 #include <clang/Frontend/CompilerInstance.h>
 
 #include "../core/analyzer_options.h"
