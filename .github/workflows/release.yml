@@ -54,7 +54,7 @@ jobs:
       uses: actions/upload-artifact@v2
       with:
         name: clsa-${{ matrix.os }}
-        path: opencl_restrict_analyzer/release/*.zip
+        path: ${{github.workspace}}/build/clsa
         retention-days: 1
   release:
     needs: build
@@ -74,5 +74,5 @@ jobs:
           prerelease: true
           title: "OpenCL Static Analyzer"
           files: |
-            clsa-macos-latest/*.zip
-            clsa-ubuntu-latest/*.zip
+            clsa-macos-latest/clsa
+            clsa-ubuntu-latest/clsa
