@@ -24,6 +24,7 @@ if (Z3_INCLUDE_DIRS)
 else()
     message(STATUS "Could not find Z3 include path")
 endif()
+include_directories(${Z3_INCLUDE_DIRS})
 
 find_package(OpenCL REQUIRED)
 include_directories(${OpenCL_INCLUDE_DIRS})
