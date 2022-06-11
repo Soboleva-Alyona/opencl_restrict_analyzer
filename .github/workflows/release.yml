@@ -54,7 +54,7 @@ jobs:
       uses: actions/upload-artifact@v2
       with:
         name: clsa-${{ matrix.os }}
-        path: release/*.zip
+        path: opencl_restrict_analyzer/release/*.zip
         retention-days: 1
   release:
     needs: build
