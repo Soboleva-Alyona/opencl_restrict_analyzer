@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Clang
+      uses: egor-tensin/setup-clang@v1
+      with:
+        version: 12
+        platform: x64
+
+    - name: Install Ubuntu dependencies
+      if: matrix.os == 'ubuntu-latest'
+      run: sudo apt-get update && sudo apt-get install -yq libclang-12-dev ocl-icd-opencl-dev
+
+    - name: Install MacOS dependencies
+      if: matrix.os == 'macos-latest'
+      run: brew install libclang-12-dev
+
+    - name: Configure CMake
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+
+    - name: Build
+      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+
+    - name: Test
+      working-directory: ${{github.workspace}}/build
+      run: ctest -C ${{env.BUILD_TYPE}}
+
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: clsa-${{ matrix.os }}
+        path: release/*.zip
+        retention-days: 1
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v2
+
+      - name: Display fetched artifacts
+        run: ls -R
+
+      - name: Emit a Github Release
+        uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "latest"
+          prerelease: true
+          title: "OpenCL Static Analyzer"
+          files: |
+            clsa-macos-latest/*.zip
+            clsa-ubuntu-latest/*.zip
