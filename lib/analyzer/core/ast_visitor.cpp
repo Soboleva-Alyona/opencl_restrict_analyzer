@@ -62,8 +62,8 @@ bool clsa::ast_visitor::VisitFunctionDecl(clang::FunctionDecl* f) {
             return std::string(name).append("#").append(id);
         };
 
-        const std::size_t global_work_size = ctx.parameters.global_work_size[i];
-        const std::size_t local_work_size = is_local_size_specified ? ctx.parameters.local_work_size->at(i) : 0;
+        const std::uint64_t global_work_size = ctx.parameters.global_work_size[i];
+        const std::uint64_t local_work_size = is_local_size_specified ? ctx.parameters.local_work_size->at(i) : 0;
 
         const bool is_uniform = is_local_size_specified && global_work_size % local_work_size == 0;
 
@@ -749,7 +749,7 @@ clsa::optional_value clsa::ast_visitor::handle_get_global_linear_id(const std::v
     z3::expr result = ctx.z3.int_val(0);
     for (uint64_t i = 0; i < ctx.parameters.global_work_size.size(); ++i) {
         result = result + global_ids[i]->to_z3_expr() * size;
-        size = size * (ctx.z3.int_val(ctx.parameters.global_work_size[i]) - global_offsets[i]->to_z3_expr());
+        size = size * (global_sizes[i]->to_z3_expr() - global_offsets[i]->to_z3_expr());
     }
     return result;
 }
