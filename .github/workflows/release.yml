@@ -41,6 +41,7 @@ jobs:
         LLVM_DIR: /usr/local/Cellar/llvm@12/12.0.1_1/lib/cmake
         LDFLAGS: "-L/usr/local/opt/llvm@12/lib"
         CPPFLAGS: "-I/usr/local/opt/llvm@12/include"
+        Clang_DIR: /usr/local/Cellar/llvm@12/12.0.1_1/lib/clang/12.0.1_1/lib/cmake
 
     - name: Build
       run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
