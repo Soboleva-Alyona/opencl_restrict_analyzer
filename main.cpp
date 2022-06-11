@@ -1,5 +1,6 @@
 #include <iostream>
 #include <regex>
+#include <sstream>
 
 #include <clang/Frontend/FrontendActions.h>
 #include <clang/Tooling/Tooling.h>
