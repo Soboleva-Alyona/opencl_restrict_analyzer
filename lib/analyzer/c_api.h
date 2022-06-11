@@ -21,7 +21,11 @@ using std::uint32_t;
 #include "stdint.h"
 #endif
 
+#if defined(__APPLE__) || defined(__MACOSX)
+#include <OpenCL/cl.h>
+#else
 #include <CL/cl.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {

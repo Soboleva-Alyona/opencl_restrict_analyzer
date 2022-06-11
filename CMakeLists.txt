@@ -15,15 +15,7 @@ add_definitions(${CLANG_DEFINITIONS})
 set(CLANG_LIBRARIES clangFrontend clangTooling clang)
 
 find_package(Z3 REQUIRED)
-find_path(Z3_INCLUDE_DIRS
-        NAMES z3.h
-        PATH_SUFFIXES z3
-        DOC "Z3 C header")
-if (Z3_INCLUDE_DIRS)
-    message(STATUS "Found Z3 include path: \"${Z3_INCLUDE_DIRS}\"")
-else()
-    message(STATUS "Could not find Z3 include path")
-endif()
+find_path(Z3_INCLUDE_DIRS NAMES z3.h PATH_SUFFIXES z3)
 include_directories(${Z3_INCLUDE_DIRS})
 
 find_package(OpenCL REQUIRED)
