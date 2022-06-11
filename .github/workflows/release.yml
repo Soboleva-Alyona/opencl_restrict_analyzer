@@ -29,7 +29,7 @@ jobs:
     - name: Install MacOS dependencies
       if: matrix.os == 'macos-latest'
       run: |
-        brew install llvm@12
+        brew install llvm@12 z3
 
     - name: Set Clang_DIR for MacOS
       if: matrix.os == 'macos-latest'
