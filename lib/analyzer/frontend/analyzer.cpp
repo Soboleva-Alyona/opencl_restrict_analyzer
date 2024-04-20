@@ -13,6 +13,7 @@
 #include "../core/ast_consumer.h"
 #include "../checkers/bounds_checker.h"
 #include "../checkers/restrict_checker.h"
+#include "../checkers/race_checker.h"
 
 clsa::analyzer::analyzer(std::string_view filename) : compiler_instance() {
     compiler_instance.createDiagnostics();
@@ -78,6 +79,9 @@ void clsa::analyzer::analyze(std::uint32_t checks, std::string_view kernel_name,
             }
             if (checks & checks::restrict) {
                 consumer.add_checker(std::make_unique<clsa::restrict_checker>(ctx));
+            }
+            if (checks & checks::race) {
+                consumer.add_checker(std::make_unique<clsa::race_checker>(ctx));
             }
         }));
     compiler_instance.getDiagnosticClient().BeginSourceFile(compiler_instance.getLangOpts(),

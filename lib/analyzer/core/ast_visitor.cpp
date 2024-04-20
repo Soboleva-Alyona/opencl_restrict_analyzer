@@ -207,6 +207,11 @@ bool clsa::ast_visitor::VisitFunctionDecl(clang::FunctionDecl* f) {
 
 // https://clang.llvm.org/doxygen/classclang_1_1Stmt.html
 bool clsa::ast_visitor::process_stmt(clsa::block* block, const clang::Stmt* stmt, clsa::value_reference& ret_ref) {
+    // todo: remove (for debug)
+    std::string str;
+    llvm::raw_string_ostream rso(str);
+    stmt->dump(rso, ctx.ast);
+    std::cout << "llvm dump: "<< str;
     if (clang::isa<clang::CompoundStmt>(stmt)) {
         return process_compound_stmt(block, clang::cast<clang::CompoundStmt>(stmt), ret_ref);
     } else if (clang::isa<clang::WhileStmt>(stmt)) {
@@ -431,7 +436,7 @@ clsa::optional_value clsa::ast_visitor::transform_array_subscript_expr(clsa::blo
     if (!lhs.has_value() || !rhs.has_value()) {
         return {};
     }
-    check_memory_access(block, array_subscript_expr, clsa::memory_access_type::read, lhs.value() + rhs.value());
+    check_memory_access(block, array_subscript_expr, clsa::memory_access_type::read, lhs.value() + rhs.value(), {});
     if (ctx.parameters.options.array_values) {
         return block->read(lhs.value() + rhs.value(), array_subscript_expr->getType());
     } else {
@@ -592,7 +597,7 @@ clsa::optional_value clsa::ast_visitor::transform_unary_operator(clsa::block* bl
             return {};
         }
         case clang::UO_Deref: {
-            check_memory_access(block, unary_operator, clsa::memory_access_type::read, sub_expr.value());
+            check_memory_access(block, unary_operator, clsa::memory_access_type::read, sub_expr.value(), {});
             if (ctx.parameters.options.array_values) {
                 return block->read(sub_expr.value(), unary_operator->getType());
             }
@@ -652,7 +657,7 @@ void clsa::ast_visitor::assign(clsa::block* block, const clang::Expr* lhs, const
         if (!base.has_value() || !idx.has_value()) {
             return;
         }
-        check_memory_access(block, lhs, clsa::memory_access_type::write, base.value() + idx.value());
+        check_memory_access(block, lhs, clsa::memory_access_type::write, base.value() + idx.value(), value);
         if (ctx.parameters.options.array_values && value.has_value()) {
             block->write(base.value() + idx.value(), value.value());
         }
@@ -663,7 +668,7 @@ void clsa::ast_visitor::assign(clsa::block* block, const clang::Expr* lhs, const
             if (!sub_expr.has_value()) {
                 return;
             }
-            check_memory_access(block, lhs, clsa::memory_access_type::write, sub_expr.value());
+            check_memory_access(block, lhs, clsa::memory_access_type::write, sub_expr.value(), value);
             if (ctx.parameters.options.array_values && value.has_value()) {
                 block->write(sub_expr.value(), value.value());
             }
@@ -675,9 +680,10 @@ void clsa::ast_visitor::assign(clsa::block* block, const clang::Expr* lhs, const
 }
 
 void clsa::ast_visitor::check_memory_access(const clsa::block* block, const clang::Expr* expr,
-                                            clsa::memory_access_type access_type, const z3::expr& address) {
+                                            clsa::memory_access_type access_type, const z3::expr& address,
+                                            const clsa::optional_value& value) {
     for (auto& checker : checkers) {
-        std::optional<clsa::violation> violation = checker->check_memory_access(block, expr, access_type, address);
+        std::optional<clsa::violation> violation = checker->check_memory_access(block, expr, access_type, address, value);
         if (violation.has_value() && violation_handler) {
             violation_handler(std::move(violation.value()));
         }

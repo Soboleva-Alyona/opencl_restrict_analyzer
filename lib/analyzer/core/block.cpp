@@ -288,6 +288,11 @@ std::optional<z3::expr> clsa::block::get_assumption() const {
     return get_assumption(nullptr);
 }
 
+std::vector<clsa::block*> clsa::block::get_children() const
+{
+    return children;
+}
+
 std::optional<z3::expr> clsa::block::get_assumption(const clsa::block* up_to) const {
     if (this == up_to) {
         return std::nullopt;

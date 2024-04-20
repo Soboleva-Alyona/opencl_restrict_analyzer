@@ -20,13 +20,16 @@ llvm::cl::opt<std::string> kernel_name(llvm::cl::cat(option_category), "kernel",
 
 enum checks {
     bounds,
-    restrict
+    restrict,
+    race
 };
 
 llvm::cl::bits<clsa::analyzer::checks> checks(llvm::cl::cat(option_category), llvm::cl::desc("Available Checks:"),
     llvm::cl::OneOrMore, llvm::cl::values(
         clEnumValN(checks::bounds, "check-bounds", "Look for out of bounds memory accesses."),
-        clEnumValN(checks::restrict, "check-restrict", "Look for 'restrict' constraint violations.")));
+        clEnumValN(checks::restrict, "check-restrict", "Look for 'restrict' constraint violations."),
+        clEnumValN(checks::race, "check-race", "Look for data races.")
+        ));
 
 llvm::cl::opt<std::uint32_t> work_dim(llvm::cl::cat(option_category), "work-dim", llvm::cl::Required,
     llvm::cl::desc("The number of dimensions used to specify the global work-items and work-items in the work-group. "
@@ -89,6 +92,9 @@ int main(int argc, const char** argv) {
     }
     if (checks.isSet(checks::restrict)) {
         analyzer_checks |= clsa::analyzer::checks::restrict;
+    }
+    if (checks.isSet(checks::race)) {
+        analyzer_checks |= clsa::analyzer::checks::race;
     }
 
     std::vector<std::size_t> global_sizes = global_work_size;

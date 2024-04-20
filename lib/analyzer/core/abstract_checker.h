@@ -22,7 +22,8 @@ namespace clsa {
 
         virtual std::optional<clsa::violation> check_memory_access(const clsa::block* block, const clang::Expr* expr,
                                                                    clsa::memory_access_type access_type,
-                                                                   const z3::expr& address) = 0;
+                                                                   const z3::expr& address,
+                                                                   const clsa::optional_value& value) = 0;
 
     protected:
         z3::context& z3_ctx;

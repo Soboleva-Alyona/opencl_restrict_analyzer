@@ -71,7 +71,8 @@ namespace clsa {
         void assign(clsa::block* block, const clang::Expr* expr, const clsa::optional_value& value);
 
         void check_memory_access(const clsa::block* block, const clang::Expr* expr,
-                                 clsa::memory_access_type access_type, const z3::expr& address);
+                                 clsa::memory_access_type access_type, const z3::expr& address,
+                                 const clsa::optional_value& value);
 
         clsa::optional_value get_dim_value(const std::vector<clsa::value_reference*>& values,
                                            const std::vector<clsa::optional_value>& args,

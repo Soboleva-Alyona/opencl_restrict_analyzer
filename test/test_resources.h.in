@@ -4,3 +4,5 @@ static constexpr auto test_bounds_file_path = "@TEST_BOUNDS_FILE_PATH@";
 static constexpr auto test_restrict_file_path = "@TEST_RESTRICT_FILE_PATH@";
 static constexpr auto test_one_dnn_file_path = "@TEST_ONE_DNN_FILE_PATH@";
 static constexpr auto test_pipe_cnn_file_path = "@TEST_PIPE_CNN_FILE_PATH@";
+static constexpr auto test_races_fail_file_path = "@TEST_RACES_FAIL_FILE_PATH@";
+static constexpr auto test_races_path_file_path = "@TEST_RACES_PASS_FILE_PATH@";

@@ -21,9 +21,21 @@ const char* clsa::restrict_checker::get_access_name(const clsa::restrict_checker
 std::optional<clsa::violation> clsa::restrict_checker::check_memory_access(const clsa::block* const block,
                                                                            const clang::Expr* const expr,
                                                                            const clsa::memory_access_type access_type,
-                                                                           const z3::expr& address) {
+                                                                           const z3::expr& address,
+                                                                           const clsa::optional_value& value) {
     const clang::ValueDecl* value_decl = get_pointer_decl(expr);
     const clsa::variable* var = block->var_get(value_decl);
+
+    // todo: remove (for debug)
+    // std::cout << "\n Type of expr: "<<expr->getType().getAsString() << '\n';
+    // const clang::Qualifiers expression_type_qualifiers = expr->getType().getQualifiers();
+    //
+    // std::cout << "\n Qualifiers: "<<expression_type_qualifiers.getAsString() << '\n';
+    // if (expression_type_qualifiers.getAsString().find("__global") != std::string::npos)
+    // {
+    //     std::cout << "Is global memeory\n";
+    // }
+
     if (nullptr == var) {
         return std::nullopt;
     }

@@ -18,6 +18,7 @@ namespace clsa {
         enum checks {
             bounds = 1,
             restrict = 2,
+            race = 3,
         };
 
         explicit analyzer(std::string_view filename);

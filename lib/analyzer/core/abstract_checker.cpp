@@ -47,6 +47,9 @@ const clang::ValueDecl* clsa::abstract_checker::get_pointer_decl(const clang::Ex
         if (unary_operator->getOpcode() == clang::UO_Deref) {
             return get_value_decl(unary_operator->getSubExpr());
         }
+    } else if (clang::isa<clang::DeclRefExpr>(expr)){
+        const auto* decl_ref_expr = clang::cast<clang::DeclRefExpr>(expr);
+        return get_value_decl(decl_ref_expr);
     }
     return nullptr;
 }
