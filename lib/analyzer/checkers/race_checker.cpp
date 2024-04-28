@@ -51,7 +51,7 @@ std::optional<clsa::violation> clsa::race_checker::check_inside_of_warp(const cl
     //          2) any variable (consider it's __local or __global)
 
     // NOTE: now chechker detects even benign races like:
-    // k = 3; - benign race
+    // __local int k = 3; - benign race
     const clang::ValueDecl* value_decl = get_pointer_decl(expr);
     const clsa::variable* var = block->var_get(value_decl);
 
@@ -98,6 +98,8 @@ std::optional<clsa::violation> clsa::race_checker::check_inside_of_warp(const cl
 
         // iterate throw all the children of block recursively
         // block->get_children();
+        int warp_size = 64; // todo here assume using AMD (nvidia size is 32) - add detalization
+
 
 
         return std::nullopt;

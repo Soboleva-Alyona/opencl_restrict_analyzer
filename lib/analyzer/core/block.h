@@ -113,7 +113,7 @@ namespace clsa {
 
         [[nodiscard]] std::optional<z3::expr> get_assumption() const;
 
-        std::vector<clsa::block*> clsa::block::get_children() const;
+        std::vector<block*> get_children() const;
 
 
         clsa::block* const parent;
