@@ -25,7 +25,9 @@ std::vector<clsa::violation> analyze(std::string_view path, std::string_view ker
     buffers.emplace_back(create_buffer_ptr(global_work_size * sizeof(int)));
     std::vector<size_t> arg_sizes = { sizeof(clsa::pseudocl_mem), sizeof(clsa::pseudocl_mem), sizeof(clsa::pseudocl_mem) };
     std::vector<void*> arg_ptrs = {buffers[0].get(), buffers[1].get(), buffers[2].get() };
-    analyzer.analyze(checks, kernel, 1, &global_work_size, nullptr, arg_ptrs.size(), arg_sizes.data(), arg_ptrs.data());
+    std::set<std::uint32_t> analyzer_checks;
+    analyzer_checks.insert(checks);
+    analyzer.analyze(&analyzer_checks, kernel, 1, &global_work_size, &global_work_size, arg_ptrs.size(), arg_sizes.data(), arg_ptrs.data());
     return std::move(violations);
 }
 
@@ -45,7 +47,9 @@ std::vector<clsa::violation> analyze_one_dnn(std::string_view path, std::string_
     float beta = 0.5;
     std::vector<size_t> arg_sizes = { sizeof(clsa::pseudocl_mem), sizeof(clsa::pseudocl_mem), sizeof(alpha), sizeof(beta), sizeof(clsa::pseudocl_mem) };
     std::vector<void*> arg_ptrs = { buffers[0].get(), buffers[1].get(), &alpha, &beta, buffers[2].get() };
-    analyzer.analyze(checks, kernel, 1, &global_work_size, nullptr, arg_ptrs.size(), arg_sizes.data(), arg_ptrs.data(), {
+    std::set<std::uint32_t> analyzer_checks;
+    analyzer_checks.insert(checks);
+    analyzer.analyze(&analyzer_checks, kernel, 1, &global_work_size, nullptr, arg_ptrs.size(), arg_sizes.data(), arg_ptrs.data(), {
         .array_values = true
     });
     return std::move(violations);
@@ -68,6 +72,8 @@ std::vector<clsa::violation> analyze_pipe_cnn(std::string_view path, std::string
     char frac_dout = 8;
     std::vector<size_t> arg_sizes = { sizeof(char), sizeof(char), sizeof(char), sizeof(clsa::pseudocl_mem), sizeof(clsa::pseudocl_mem), sizeof(clsa::pseudocl_mem) };
     std::vector<void*> arg_ptrs = { &data_dim1, &data_dim2, &frac_dout, buffers[0].get(), buffers[1].get(), buffers[2].get() };
-    analyzer.analyze(checks, kernel, 3, global_work_sizes.data(), nullptr, arg_ptrs.size(), arg_sizes.data(), arg_ptrs.data());
+    std::set<std::uint32_t> analyzer_checks;
+    analyzer_checks.insert(checks);
+    analyzer.analyze(&analyzer_checks, kernel, 3, global_work_sizes.data(), nullptr, arg_ptrs.size(), arg_sizes.data(), arg_ptrs.data());
     return std::move(violations);
 }

@@ -10,15 +10,17 @@ namespace {
     const std::string global_memory_qualifier = "__global";
     const std::string local_memory_qualifier = "__local";
 
-
-    bool is_memory_private_or_constant(const clang::Qualifiers qualifiers)
+    bool is_memory_private_or_constant(const clang::Expr *const expr)
     {
-        if (qualifiers.getAsString().find(global_memory_qualifier) != std::string::npos
-            || qualifiers.getAsString().find(local_memory_qualifier) != std::string::npos)
-        {
-            return false;
+        const auto type = expr->getType();
+        if (type.getUnqualifiedType().getAsString().find(global_memory_qualifier) == std::string::npos
+            && type.getUnqualifiedType().getAsString().find(local_memory_qualifier) == std::string::npos
+            && type.getQualifiers().getAsString().find(global_memory_qualifier) == std::string::npos
+            && type.getQualifiers().getAsString().find(local_memory_qualifier) == std::string::npos)
+       {
+            return true;
         }
-        return true;
+        return false;
     }
 
     bool do_workers_intersect_for_array_access()
@@ -30,17 +32,18 @@ namespace {
 }
 
 std::optional<clsa::violation> clsa::race_checker::check_inside_of_warp(const clsa::block *const block,
-                                                    const clang::Expr *const expr,
-                                                    const clsa::memory_access_type access_type,
-                                                    const z3::expr &address,
-                                                    const clsa::optional_value& value) {
+                                                                        const clang::Expr *const expr,
+                                                                        const clsa::memory_access_type access_type,
+                                                                        const z3::expr &address,
+                                                                        const clsa::optional_value& value,
+                                                                        const clsa::optional_value& value_copy,
+                                                                        const z3::expr& address_copy) {
     if (access_type != clsa::write)
     {
         return std::nullopt;
     }
-    const clang::Qualifiers expression_type_qualifiers = expr->getType().getQualifiers();
     // private memory is only visible to a worker, constant is read-only => no write-write races inside of warp
-    if (is_memory_private_or_constant(expression_type_qualifiers))
+    if (is_memory_private_or_constant(expr))
     {
         return std::nullopt;
     }
@@ -50,8 +53,6 @@ std::optional<clsa::violation> clsa::race_checker::check_inside_of_warp(const cl
     //          1) arraySubExps - index is integer literal or some combination of local_id functions (a[get_local_id(0)] = 0)
     //          2) any variable (consider it's __local or __global)
 
-    // NOTE: now chechker detects even benign races like:
-    // __local int k = 3; - benign race
     const clang::ValueDecl* value_decl = get_pointer_decl(expr);
     const clsa::variable* var = block->var_get(value_decl);
 
@@ -61,10 +62,15 @@ std::optional<clsa::violation> clsa::race_checker::check_inside_of_warp(const cl
         message << "Possible write/write race discovered through access to variable`" << var->decl->getName().str()
                 << "` at " << expr->getExprLoc().printToString(get_source_manager()) << std::endl;
 
-        return clsa::violation {
-            .location = expr->getExprLoc(),
-            .message = message.str()
-        };
+        z3::expr different_values_written = value.value() != value_copy.value();
+
+        if (const std::optional<z3::model> result = check(block, different_values_written); result.has_value())
+        {
+            return clsa::violation {
+                .location = expr->getExprLoc(),
+                .message = message.str()
+            };
+        }
     }
 
     if (clang::isa<clang::ArraySubscriptExpr>(expr))
@@ -73,36 +79,24 @@ std::optional<clsa::violation> clsa::race_checker::check_inside_of_warp(const cl
         message << "Possible write/write race discovered through the access to array`" << var->decl->getName().str()
                 << "` at " << expr->getExprLoc().printToString(get_source_manager()) << std::endl;
 
-        const auto* array_subscript_expr = clang::cast<clang::ArraySubscriptExpr>(expr);
-        const auto* index_expr = array_subscript_expr->getIdx();
-
-        if (clang::isa<clang::IntegerLiteral>(index_expr)) // TODO add check that num of workers > 1 (local_size)
+        z3::expr race_condition = address_copy == address;
+        if (value.has_value() && value_copy.has_value())
         {
+            race_condition = race_condition && (value.value() != value_copy.value());
+        }
+
+        if (const std::optional<z3::model> result = check(block, race_condition); result.has_value())
+        {
+            const std::int64_t var_value = result.value().eval(var->to_z3_expr()).get_numeral_int64();
+            const std::int64_t address_value = result->eval(address).get_numeral_int64();
+            const std::int64_t address_copy_value = result->eval(address_copy).get_numeral_int64();
+            const std::int64_t base_address_value = result->eval(var->to_z3_expr(clsa::VAR_META_MEM_BASE)).get_numeral_int64();
+            const z3::expr size = result->eval(var->to_z3_expr(clsa::VAR_META_MEM_SIZE));
             return clsa::violation {
                 .location = expr->getExprLoc(),
                 .message = message.str()
             };
         }
-        // local_size
-        // size_of_array from parameters or declaration
-        // std::optional<z3::expr> array_size = value.metadata(VAR_META_MEM_SIZE);
-        // const auto array_size_expr = array_size.value();
-        std::cout << "\n Type of expr: "<<expr->getType().getAsString() << '\n';
-
-        std::cout << "\n Qualifiers: "<<expression_type_qualifiers.getAsString() << '\n';
-        if (expression_type_qualifiers.getAsString().find("__global") != std::string::npos)
-        {
-            std::cout << "Is global memeory\n";
-        }
-        std::cout << "\n inner type: " << index_expr->getType().getAsString() << "\n";
-
-        // iterate throw all the children of block recursively
-        // block->get_children();
-        int warp_size = 64; // todo here assume using AMD (nvidia size is 32) - add detalization
-
-
-
-        return std::nullopt;
     }
 
     return std::nullopt;
@@ -110,14 +104,17 @@ std::optional<clsa::violation> clsa::race_checker::check_inside_of_warp(const cl
 
 
 std::optional<clsa::violation> clsa::race_checker::check_memory_access(const clsa::block* const block,
-                                                                           const clang::Expr* const expr,
-                                                                           const clsa::memory_access_type access_type,
-                                                                           const z3::expr& address,
-                                                                           const clsa::optional_value& value) {
+                                                                       const clang::Expr* const expr,
+                                                                       const clsa::memory_access_type access_type,
+                                                                       const z3::expr& address,
+                                                                       const clsa::optional_value& value,
+                                                                       const clsa::optional_value& value_copy,
+                                                                       const z3::expr& address_copy) {
     // inside of warp
-    std::optional<violation> warp_race_violation = check_inside_of_warp(block, expr, access_type, address, value);
+    std::optional<violation> warp_race_violation = check_inside_of_warp(block, expr, access_type, address, value, value_copy, address_copy);
     if (warp_race_violation != std::nullopt)
     {
+        // todo - don't return (merge them, otherwise writes/accesses will not be kept)
         return warp_race_violation;
     }
     // inside of a workgroup

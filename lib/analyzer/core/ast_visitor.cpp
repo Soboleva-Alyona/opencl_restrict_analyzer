@@ -76,6 +76,13 @@ bool clsa::ast_visitor::VisitFunctionDecl(clang::FunctionDecl* f) {
             global_id->to_z3_expr() >= 0 && global_id->to_z3_expr() < ctx.z3.int_val(global_work_size));
         global_ids.push_back(global_id);
 
+        const auto& global_id_copy = global_block->value_decl(id("global_id_copy"), ctx.z3.int_sort());
+        global_block->assume(
+            global_id_copy->to_z3_expr() >= 0 && global_id_copy->to_z3_expr() < ctx.z3.int_val(global_work_size));
+        global_ids_copy.push_back(global_id_copy);
+
+        global_block->assume(global_id_copy->to_z3_expr() != global_id->to_z3_expr());
+
         const auto& local_size = global_block->value_decl(id("local_size"), ctx.z3.int_sort());
         if (is_uniform) {
             global_block->assume(local_size->to_z3_expr() == ctx.z3.int_val(local_work_size));
@@ -96,6 +103,12 @@ bool clsa::ast_visitor::VisitFunctionDecl(clang::FunctionDecl* f) {
         const auto& local_id = global_block->value_decl(id("local_id"), ctx.z3.int_sort());
         global_block->assume(local_id->to_z3_expr() >= 0 && local_id->to_z3_expr() < local_size->to_z3_expr());
         local_ids.push_back(local_id);
+
+        const auto& local_id_copy = global_block->value_decl(id("local_id_copy"), ctx.z3.int_sort());
+        global_block->assume(local_id_copy->to_z3_expr() >= 0 && local_id_copy->to_z3_expr() < local_size->to_z3_expr());
+        local_ids_copy.push_back(local_id_copy);
+
+        global_block->assume(local_id->to_z3_expr() != local_id_copy->to_z3_expr());
 
         const auto& num_groups = global_block->value_decl(id("num_groups"), ctx.z3.int_sort());
         global_block->assume(
@@ -208,10 +221,10 @@ bool clsa::ast_visitor::VisitFunctionDecl(clang::FunctionDecl* f) {
 // https://clang.llvm.org/doxygen/classclang_1_1Stmt.html
 bool clsa::ast_visitor::process_stmt(clsa::block* block, const clang::Stmt* stmt, clsa::value_reference& ret_ref) {
     // todo: remove (for debug)
-    std::string str;
-    llvm::raw_string_ostream rso(str);
-    stmt->dump(rso, ctx.ast);
-    std::cout << "llvm dump: "<< str;
+    // std::string str;
+    // llvm::raw_string_ostream rso(str);
+    // stmt->dump(rso, ctx.ast);
+    // std::cout << "llvm dump: "<< str;
     if (clang::isa<clang::CompoundStmt>(stmt)) {
         return process_compound_stmt(block, clang::cast<clang::CompoundStmt>(stmt), ret_ref);
     } else if (clang::isa<clang::WhileStmt>(stmt)) {
@@ -246,7 +259,7 @@ bool clsa::ast_visitor::process_compound_stmt(clsa::block* block, const clang::C
 bool clsa::ast_visitor::process_while_stmt(clsa::block* block, const clang::WhileStmt* while_stmt,
                                            clsa::value_reference& ret_ref) {
     for (int i = 0; i < ctx.parameters.options.loop_unwinding_iterations_limit; ++i) {
-        clsa::optional_value condition = transform_expr(block, while_stmt->getCond());
+        clsa::optional_value condition = transform_expr(block, while_stmt->getCond(), false);
         z3::expr condition_expr = condition.has_value() ? to_bool(ctx.z3, condition.value()) : unknown(ctx.z3.bool_sort());
         if (block->check(condition_expr) != z3::sat) {
             break;
@@ -279,7 +292,7 @@ bool clsa::ast_visitor::process_do_stmt(clsa::block* block, const clang::DoStmt*
                 return false;
             }
         }
-        clsa::optional_value condition = transform_expr(block, do_stmt->getCond());
+        clsa::optional_value condition = transform_expr(block, do_stmt->getCond(), false);
         condition_expr = condition.has_value() ? to_bool(ctx.z3, condition.value()) : unknown(ctx.z3.bool_sort());
         if (block->check(condition_expr.value()) != z3::sat) {
             break;
@@ -297,7 +310,7 @@ bool clsa::ast_visitor::process_for_stmt(clsa::block* block, const clang::ForStm
     for (int i = 0; i < ctx.parameters.options.loop_unwinding_iterations_limit; ++i) {
         std::optional<z3::expr> condition_expr;
         if (for_stmt->getCond() != nullptr) {
-            clsa::optional_value condition = transform_expr(for_block, for_stmt->getCond());
+            clsa::optional_value condition = transform_expr(for_block, for_stmt->getCond(), false);
             condition_expr = condition.has_value() ? to_bool(ctx.z3, condition.value()) : unknown(ctx.z3.bool_sort());
             if (for_block->check(condition_expr.value()) != z3::sat) {
                 break;
@@ -315,7 +328,7 @@ bool clsa::ast_visitor::process_for_stmt(clsa::block* block, const clang::ForStm
             }
         }
         if (for_stmt->getInc() != nullptr) {
-            transform_expr(for_block, for_stmt->getInc());
+            transform_expr(for_block, for_stmt->getInc(), false);
         }
     }
     block->join();
@@ -324,7 +337,7 @@ bool clsa::ast_visitor::process_for_stmt(clsa::block* block, const clang::ForStm
 
 bool clsa::ast_visitor::process_if_stmt(clsa::block* block, const clang::IfStmt* if_stmt,
                                         clsa::value_reference& ret_ref) {
-    clsa::optional_value condition = transform_expr(block, if_stmt->getCond());
+    clsa::optional_value condition = transform_expr(block, if_stmt->getCond(), false);
     z3::expr condition_expr = condition.has_value() ? to_bool(ctx.z3, condition.value()) : unknown(ctx.z3.bool_sort());
     clsa::block* then_block = block->make_inner(condition_expr);
     bool then_return = !process_stmt(then_block, if_stmt->getThen(), ret_ref);
@@ -343,7 +356,7 @@ bool clsa::ast_visitor::process_if_stmt(clsa::block* block, const clang::IfStmt*
 bool clsa::ast_visitor::process_return_stmt(clsa::block* block, const clang::ReturnStmt* return_stmt,
                                             clsa::value_reference& ret_ref) {
     if (return_stmt->getRetValue()) {
-        const auto expr = transform_expr(block, return_stmt->getRetValue());
+        const auto expr = transform_expr(block, return_stmt->getRetValue(), false);
         if (expr.has_value()) {
             block->value_set(&ret_ref, expr.value());
         }
@@ -384,44 +397,44 @@ void clsa::ast_visitor::process_var_decl(clsa::block* block, const clang::VarDec
         }
     } else {
         block->var_decl(var_decl,
-            var_decl->hasInit() ? transform_expr(block, var_decl->getInit()) : clsa::optional_value());
+            var_decl->hasInit() ? transform_expr(block, var_decl->getInit(), false) : clsa::optional_value());
     }
 }
 
 clsa::optional_value clsa::ast_visitor::transform_value_stmt(clsa::block* block, const clang::ValueStmt* value_stmt) {
     if (clang::isa<clang::Expr>(value_stmt)) {
-        return transform_expr(block, clang::cast<clang::Expr>(value_stmt));
+        return transform_expr(block, clang::cast<clang::Expr>(value_stmt), false);
     } else {
         return {};
     }
 }
 
 // https://clang.llvm.org/doxygen/classclang_1_1Expr.html
-clsa::optional_value clsa::ast_visitor::transform_expr(clsa::block* block, const clang::Expr* expr) {
+clsa::optional_value clsa::ast_visitor::transform_expr(clsa::block* block, const clang::Expr* expr, bool copy_thread) {
     expr = expr->IgnoreParens();
     if (clang::isa<clang::CastExpr>(expr)) {
-        return transform_cast_expr(block, clang::cast<clang::CastExpr>(expr));
+        return transform_cast_expr(block, clang::cast<clang::CastExpr>(expr), copy_thread);
     } else if (clang::isa<clang::ArraySubscriptExpr>(expr)) {
-        return transform_array_subscript_expr(block, clang::cast<clang::ArraySubscriptExpr>(expr));
+        return transform_array_subscript_expr(block, clang::cast<clang::ArraySubscriptExpr>(expr), copy_thread);
     } else if (clang::isa<clang::BinaryOperator>(expr)) {
-        return transform_binary_operator(block, clang::cast<clang::BinaryOperator>(expr));
+        return transform_binary_operator(block, clang::cast<clang::BinaryOperator>(expr), false);
     } else if (clang::isa<clang::CallExpr>(expr)) {
-        return transform_call_expr(block, clang::cast<clang::CallExpr>(expr));
+        return transform_call_expr(block, clang::cast<clang::CallExpr>(expr), copy_thread);
     } else if (clang::isa<clang::DeclRefExpr>(expr)) {
-        return transform_decl_ref_expr(block, clang::cast<clang::DeclRefExpr>(expr));
+        return transform_decl_ref_expr(block, clang::cast<clang::DeclRefExpr>(expr), copy_thread);
     } else if (clang::isa<clang::IntegerLiteral>(expr)) {
         return ctx.z3.int_val(clang::cast<clang::IntegerLiteral>(expr)->getValue().getLimitedValue());
     } else if (clang::isa<clang::CXXBoolLiteralExpr>(expr)) {
         return ctx.z3.bool_val(clang::cast<clang::CXXBoolLiteralExpr>(expr)->getValue());
     } else if (clang::isa<clang::UnaryOperator>(expr)) {
-        return transform_unary_operator(block, clang::cast<clang::UnaryOperator>(expr));
+        return transform_unary_operator(block, clang::cast<clang::UnaryOperator>(expr), copy_thread);
     } else {
         return {};
     }
 }
 
-clsa::optional_value clsa::ast_visitor::transform_cast_expr(clsa::block* block, const clang::CastExpr* cast_expr) {
-    clsa::optional_value sub_expr = transform_expr(block, cast_expr->getSubExpr());
+clsa::optional_value clsa::ast_visitor::transform_cast_expr(clsa::block* block, const clang::CastExpr* cast_expr, bool copy_thread) {
+    clsa::optional_value sub_expr = transform_expr(block, cast_expr->getSubExpr(), copy_thread);
     if (!sub_expr.has_value()) {
         return {};
     }
@@ -430,89 +443,111 @@ clsa::optional_value clsa::ast_visitor::transform_cast_expr(clsa::block* block, 
 }
 
 clsa::optional_value clsa::ast_visitor::transform_array_subscript_expr(clsa::block* block,
-                                                                       const clang::ArraySubscriptExpr* array_subscript_expr) {
-    auto&& lhs = transform_expr(block, array_subscript_expr->getBase());
-    auto&& rhs = transform_expr(block, array_subscript_expr->getIdx());
+                                                                       const clang::ArraySubscriptExpr* array_subscript_expr, bool copy_thread) {
+    auto&& lhs = transform_expr(block, array_subscript_expr->getBase(), copy_thread);
+    auto&& rhs = transform_expr(block, array_subscript_expr->getIdx(), copy_thread);
+    auto&& rhs_copy = transform_expr(block, array_subscript_expr->getIdx(), !copy_thread);
     if (!lhs.has_value() || !rhs.has_value()) {
         return {};
     }
-    check_memory_access(block, array_subscript_expr, clsa::memory_access_type::read, lhs.value() + rhs.value(), {});
+    if (!copy_thread)
+    {
+        check_memory_access(block, array_subscript_expr, clsa::memory_access_type::read, lhs.value() + rhs.value(), {}, {}, lhs.value() + rhs_copy.value());
+    }
     if (ctx.parameters.options.array_values) {
         return block->read(lhs.value() + rhs.value(), array_subscript_expr->getType());
     } else {
-        return {};
+        return lhs.value() + rhs.value();
     }
 }
 
 clsa::optional_value clsa::ast_visitor::transform_binary_operator(clsa::block* block,
-                                                                  const clang::BinaryOperator* binary_operator) {
+                                                                  const clang::BinaryOperator* binary_operator, bool copy_thread) {
     auto&& lhs = binary_operator->getOpcode() != clang::BO_Assign
-        ? transform_expr(block, binary_operator->getLHS()) : clsa::optional_value();
-    auto&& rhs = transform_expr(block, binary_operator->getRHS());
+        ? transform_expr(block, binary_operator->getLHS(), copy_thread) : clsa::optional_value();
+    auto&& lhs_copy = binary_operator->getOpcode() != clang::BO_Assign
+        ? transform_expr(block, binary_operator->getLHS(), !copy_thread) : clsa::optional_value();
+    auto&& rhs = transform_expr(block, binary_operator->getRHS(), copy_thread);
+    auto&& rhs_copy = transform_expr(block, binary_operator->getRHS(), !copy_thread);
     const clang::QualType type = binary_operator->getType();
     clsa::optional_value value;
+    clsa::optional_value value_copy;
     if ((lhs.has_value() || binary_operator->getOpcode() == clang::BO_Assign) && rhs.has_value()) {
         switch (binary_operator->getOpcode()) {
             case clang::BO_Assign:
             case clang::BO_Comma: {
                 value = rhs;
+                value_copy = rhs_copy;
                 break;
             }
             case clang::BO_Add:
             case clang::BO_AddAssign: {
                 value = lhs.value() + rhs.value();
+                value_copy = lhs_copy.value() + rhs_copy.value();
                 break;
             }
             case clang::BO_Sub:
             case clang::BO_SubAssign: {
                 value = lhs.value() - rhs.value();
+                value_copy = lhs_copy.value() - rhs_copy.value();
                 break;
             }
             case clang::BO_Mul:
             case clang::BO_MulAssign: {
                 value = lhs.value() * rhs.value();
+                value_copy = lhs_copy.value() * rhs_copy.value();
                 break;
             }
             case clang::BO_Div:
             case clang::BO_DivAssign: {
                 value = lhs.value() / rhs.value();
+                value_copy = lhs_copy.value() / rhs_copy.value();
                 break;
             }
             case clang::BO_Rem:
             case clang::BO_RemAssign: {
                 value = lhs.value() % rhs.value();
+                value_copy = lhs_copy.value() % rhs_copy.value();
                 break;
             }
             case clang::BO_LAnd: {
                 value = cast(ctx.z3, to_bool(ctx.z3, lhs.value()) && to_bool(ctx.z3, rhs.value()), type);
+                value_copy = cast(ctx.z3, to_bool(ctx.z3, lhs_copy.value()) && to_bool(ctx.z3, rhs_copy.value()), type);
                 break;
             }
             case clang::BO_LOr: {
                 value = cast(ctx.z3, to_bool(ctx.z3, lhs.value()) || to_bool(ctx.z3, rhs.value()), type);
+                value_copy = cast(ctx.z3, to_bool(ctx.z3, lhs_copy.value()) || to_bool(ctx.z3, rhs_copy.value()), type);
                 break;
             }
             case clang::BO_EQ: {
                 value = lhs.value() == rhs.value();
+                value_copy = lhs_copy.value() == rhs_copy.value();
                 break;
             }
             case clang::BO_GE: {
                 value = to_numeral(ctx.z3, lhs.value()) >= to_numeral(ctx.z3, rhs.value());
+                value_copy = to_numeral(ctx.z3, lhs_copy.value()) >= to_numeral(ctx.z3, rhs_copy.value());
                 break;
             }
             case clang::BO_GT: {
                 value = to_numeral(ctx.z3, lhs.value()) > to_numeral(ctx.z3, rhs.value());
+                value_copy = to_numeral(ctx.z3, lhs_copy.value()) > to_numeral(ctx.z3, rhs_copy.value());
                 break;
             }
             case clang::BO_LE: {
                 value = to_numeral(ctx.z3, lhs.value()) <= to_numeral(ctx.z3, rhs.value());
+                value_copy = to_numeral(ctx.z3, lhs_copy.value()) <= to_numeral(ctx.z3, rhs_copy.value());
                 break;
             }
             case clang::BO_LT: {
                 value = to_numeral(ctx.z3, lhs.value()) < to_numeral(ctx.z3, rhs.value());
+                value_copy = to_numeral(ctx.z3, lhs_copy.value()) < to_numeral(ctx.z3, rhs_copy.value());
                 break;
             }
             case clang::BO_NE: {
                 value = lhs.value() != rhs.value();
+                value_copy = lhs_copy.value() != rhs_copy.value();
                 break;
             }
             default: {
@@ -524,15 +559,18 @@ clsa::optional_value clsa::ast_visitor::transform_binary_operator(clsa::block* b
         auto&& ptr = binary_operator->getLHS()->getType()->isPointerType() ? lhs : rhs;
         value.set_metadata(clsa::VAR_META_MEM_BASE, ptr.metadata(clsa::VAR_META_MEM_BASE));
         value.set_metadata(clsa::VAR_META_MEM_SIZE, ptr.metadata(clsa::VAR_META_MEM_SIZE));
+        value_copy.set_metadata(clsa::VAR_META_MEM_BASE, ptr.metadata(clsa::VAR_META_MEM_BASE));
+        value_copy.set_metadata(clsa::VAR_META_MEM_SIZE, ptr.metadata(clsa::VAR_META_MEM_SIZE));
     }
     if (binary_operator->isAssignmentOp()) {
-        assign(block, binary_operator->getLHS(), value);
+        assign(block, binary_operator->getLHS(), value, value_copy, copy_thread);
     }
     return value;
 }
 
-clsa::optional_value clsa::ast_visitor::transform_call_expr(clsa::block* block, const clang::CallExpr* call_expr) {
+clsa::optional_value clsa::ast_visitor::transform_call_expr(clsa::block* block, const clang::CallExpr* call_expr, bool copy_thread) {
     static std::unordered_map<std::string, clsa::optional_value (clsa::ast_visitor::*)(
+        // todo refactor (merge)
         const std::vector<clsa::optional_value>&)> builtin_handlers = {
         {"get_work_dim",            &clsa::ast_visitor::handle_get_work_dim},
         {"get_global_size",         &clsa::ast_visitor::handle_get_global_size},
@@ -546,16 +584,38 @@ clsa::optional_value clsa::ast_visitor::transform_call_expr(clsa::block* block, 
         {"get_global_linear_id",    &clsa::ast_visitor::handle_get_global_linear_id},
         {"get_local_linear_id",     &clsa::ast_visitor::handle_get_local_linear_id},
     };
+    static std::unordered_map<std::string, clsa::optional_value (clsa::ast_visitor::*)(
+        const std::vector<clsa::optional_value>&)> builtin_handlers_for_copy_thread = {
+        {"get_work_dim",            &clsa::ast_visitor::handle_get_work_dim},
+        {"get_global_size",         &clsa::ast_visitor::handle_get_global_size},
+        {"get_global_id",           &clsa::ast_visitor::handle_get_global_id_copy},
+        {"get_local_size",          &clsa::ast_visitor::handle_get_local_size},
+        {"get_enqueued_local_size", &clsa::ast_visitor::handle_get_enqueued_local_size},
+        {"get_local_id",            &clsa::ast_visitor::handle_get_local_id_copy},
+        {"get_num_groups",          &clsa::ast_visitor::handle_get_num_groups},
+        {"get_group_id",            &clsa::ast_visitor::handle_get_group_id},
+        {"get_global_offset",       &clsa::ast_visitor::handle_get_global_offset},
+        {"get_global_linear_id",    &clsa::ast_visitor::handle_get_global_linear_id},
+        {"get_local_linear_id",     &clsa::ast_visitor::handle_get_local_linear_id},
+    };
     const clang::Decl* callee_decl = call_expr->getCalleeDecl();
     std::vector<clsa::optional_value> args;
     std::transform(call_expr->getArgs(), call_expr->getArgs() + call_expr->getNumArgs(),
         std::inserter(args, args.begin()), [&](const clang::Expr* expr) {
-            return transform_expr(block, expr);
+            return transform_expr(block, expr, copy_thread);
         });
     if (clang::isa<clang::NamedDecl>(callee_decl)) {
         const std::string& name = clang::cast<clang::NamedDecl>(callee_decl)->getName().str();
-        if (auto it = builtin_handlers.find(name); it != builtin_handlers.end()) {
-            return (this->*it->second)(args);
+        if (!copy_thread)
+        {
+            if (auto it = builtin_handlers.find(name); it != builtin_handlers.end()) {
+                return (this->*it->second)(args);
+            }
+        } else
+        {
+            if (auto it = builtin_handlers_for_copy_thread.find(name); it != builtin_handlers_for_copy_thread.end()) {
+                return (this->*it->second)(args);
+            }
         }
     }
     if (clang::isa<clang::FunctionDecl>(callee_decl) && callee_decl->hasBody()) {
@@ -580,14 +640,14 @@ clsa::optional_value clsa::ast_visitor::transform_call_expr(clsa::block* block, 
 }
 
 clsa::optional_value clsa::ast_visitor::transform_decl_ref_expr(clsa::block* block,
-                                                                const clang::DeclRefExpr* decl_ref_expr) {
+                                                                const clang::DeclRefExpr* decl_ref_expr, bool copy_thread) {
     const clsa::variable* var = block->var_get(decl_ref_expr->getDecl());
     return var ? var->to_value() : clsa::optional_value();
 }
 
 clsa::optional_value clsa::ast_visitor::transform_unary_operator(clsa::block* block,
-                                                                 const clang::UnaryOperator* unary_operator) {
-    clsa::optional_value sub_expr = transform_expr(block, unary_operator->getSubExpr());
+                                                                 const clang::UnaryOperator* unary_operator, bool copy_thread) {
+    clsa::optional_value sub_expr = transform_expr(block, unary_operator->getSubExpr(), copy_thread);
     if (!sub_expr.has_value()) {
         return {};
     }
@@ -597,7 +657,10 @@ clsa::optional_value clsa::ast_visitor::transform_unary_operator(clsa::block* bl
             return {};
         }
         case clang::UO_Deref: {
-            check_memory_access(block, unary_operator, clsa::memory_access_type::read, sub_expr.value(), {});
+            if (!copy_thread)
+            {
+                check_memory_access(block, unary_operator, clsa::memory_access_type::read, sub_expr.value(), {}, {}, z3::re_empty(ctx.z3.int_sort()));
+            }
             if (ctx.parameters.options.array_values) {
                 return block->read(sub_expr.value(), unary_operator->getType());
             }
@@ -621,21 +684,25 @@ clsa::optional_value clsa::ast_visitor::transform_unary_operator(clsa::block* bl
             return to_numeral(ctx.z3, sub_expr_value);
         }
         case clang::UO_PostDec: {
-            assign(block, unary_operator->getSubExpr(), sub_expr.map_value([](auto value) { return value - 1; }));
+            // todo omplement value_copy
+            assign(block, unary_operator->getSubExpr(), sub_expr.map_value([](auto value) { return value - 1; }), {}, copy_thread);
             return sub_expr;
         }
         case clang::UO_PostInc: {
-            assign(block, unary_operator->getSubExpr(), sub_expr.map_value([](auto value) { return value + 1; }));
+            // todo omplement value_copy
+            assign(block, unary_operator->getSubExpr(), sub_expr.map_value([](auto value) { return value + 1; }), {}, copy_thread);
             return sub_expr;
         }
         case clang::UO_PreDec: {
             sub_expr.set_value(sub_expr.value() - 1);
-            assign(block, unary_operator->getSubExpr(), sub_expr);
+            // todo omplement value_copy
+            assign(block, unary_operator->getSubExpr(), sub_expr, {}, copy_thread);
             return sub_expr;
         }
         case clang::UO_PreInc: {
             sub_expr.set_value(sub_expr.value() + 1);
-            assign(block, unary_operator->getSubExpr(), sub_expr);
+            // todo omplement value_copy
+            assign(block, unary_operator->getSubExpr(), sub_expr, {}, copy_thread);
             return sub_expr;
         }
         default: {
@@ -648,27 +715,39 @@ z3::expr clsa::ast_visitor::unknown(const z3::sort& sort) {
     return ctx.z3.constant(("unknown_" + std::to_string(unknowns++)).c_str(), sort);
 }
 
-void clsa::ast_visitor::assign(clsa::block* block, const clang::Expr* lhs, const clsa::optional_value& value) {
+void clsa::ast_visitor::assign(clsa::block* block,
+                                const clang::Expr* lhs,
+                                const clsa::optional_value& value,
+                                const clsa::optional_value& value_copy,
+                                bool copy_thread)
+{
     lhs = lhs->IgnoreParenCasts();
     if (clang::isa<clang::ArraySubscriptExpr>(lhs)) {
         const auto* array_subscript_expr = clang::cast<clang::ArraySubscriptExpr>(lhs);
-        const auto base = transform_expr(block, array_subscript_expr->getBase());
-        const auto idx = transform_expr(block, array_subscript_expr->getIdx());
+        const auto base = transform_expr(block, array_subscript_expr->getBase(), copy_thread);
+        const auto idx = transform_expr(block, array_subscript_expr->getIdx(), copy_thread);
+        const auto idx_t2 = transform_expr(block, array_subscript_expr->getIdx(), !copy_thread);
         if (!base.has_value() || !idx.has_value()) {
             return;
         }
-        check_memory_access(block, lhs, clsa::memory_access_type::write, base.value() + idx.value(), value);
+        if (!copy_thread)
+        {
+            check_memory_access(block, lhs, clsa::memory_access_type::write, base.value() + idx.value(), value, value_copy, base.value() + idx_t2.value());
+        }
         if (ctx.parameters.options.array_values && value.has_value()) {
             block->write(base.value() + idx.value(), value.value());
         }
     } else if (clang::isa<clang::UnaryOperator>(lhs)) {
         const auto* unary_operator = clang::cast<clang::UnaryOperator>(lhs);
         if (unary_operator->getOpcode() == clang::UO_Deref) {
-            const auto sub_expr = transform_expr(block, unary_operator->getSubExpr());
+            const auto sub_expr = transform_expr(block, unary_operator->getSubExpr(), copy_thread);
             if (!sub_expr.has_value()) {
                 return;
             }
-            check_memory_access(block, lhs, clsa::memory_access_type::write, sub_expr.value(), value);
+            // todo omplement value_copy
+            if (!copy_thread) {
+                check_memory_access(block, lhs, clsa::memory_access_type::write, sub_expr.value(), value, {}, z3::re_empty(ctx.z3.int_sort()));
+            }
             if (ctx.parameters.options.array_values && value.has_value()) {
                 block->write(sub_expr.value(), value.value());
             }
@@ -681,9 +760,10 @@ void clsa::ast_visitor::assign(clsa::block* block, const clang::Expr* lhs, const
 
 void clsa::ast_visitor::check_memory_access(const clsa::block* block, const clang::Expr* expr,
                                             clsa::memory_access_type access_type, const z3::expr& address,
-                                            const clsa::optional_value& value) {
+                                            const clsa::optional_value& value,
+                                            const clsa::optional_value& value_copy, const z3::expr& address_copy) {
     for (auto& checker : checkers) {
-        std::optional<clsa::violation> violation = checker->check_memory_access(block, expr, access_type, address, value);
+        std::optional<clsa::violation> violation = checker->check_memory_access(block, expr, access_type, address, value, value_copy, address_copy);
         if (violation.has_value() && violation_handler) {
             violation_handler(std::move(violation.value()));
         }
@@ -721,6 +801,10 @@ clsa::optional_value clsa::ast_visitor::handle_get_global_id(const std::vector<c
     return get_dim_value(global_ids, args, ctx.z3.int_val(0));
 }
 
+clsa::optional_value clsa::ast_visitor::handle_get_global_id_copy(const std::vector<clsa::optional_value>& args) {
+    return get_dim_value(global_ids_copy, args, ctx.z3.int_val(0));
+}
+
 clsa::optional_value clsa::ast_visitor::handle_get_local_size(const std::vector<clsa::optional_value>& args) {
     return get_dim_value(local_sizes, args, ctx.z3.int_val(1));
 }
@@ -733,6 +817,10 @@ clsa::optional_value clsa::ast_visitor::handle_get_enqueued_local_size(
 
 clsa::optional_value clsa::ast_visitor::handle_get_local_id(const std::vector<clsa::optional_value>& args) {
     return get_dim_value(local_ids, args, ctx.z3.int_val(0));
+}
+
+clsa::optional_value clsa::ast_visitor::handle_get_local_id_copy(const std::vector<clsa::optional_value>& args) {
+    return get_dim_value(local_ids_copy, args, ctx.z3.int_val(0));
 }
 
 clsa::optional_value clsa::ast_visitor::handle_get_num_groups(const std::vector<clsa::optional_value>& args) {

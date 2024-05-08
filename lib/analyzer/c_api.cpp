@@ -20,7 +20,7 @@ void clsa_release_mem_object(clsa_mem memobj) {
     delete memobj;
 }
 
-clsa_violation* clsa_analyze(uint32_t checks, const char* filename, const char* kernel_name, uint32_t work_dim,
+clsa_violation* clsa_analyze(std::set<uint32_t>* checks, const char* filename, const char* kernel_name, uint32_t work_dim,
                              const size_t* global_work_size, const size_t* local_work_size,
                              size_t args_count, const std::size_t* arg_sizes, void** arg_values,
                              size_t* violation_count) {

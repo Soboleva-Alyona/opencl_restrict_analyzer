@@ -32,32 +32,32 @@ set(LIBS ${OpenCL_LIBRARIES} ${CLANG_LIBRARIES} ${Z3_LIBRARIES})
 add_executable(clsa ${LIB_SRCS} main.cpp)
 target_link_libraries(clsa PRIVATE ${LIBS})
 
-#include(FetchContent)
-#FetchContent_Declare(
-#    googletest
-#    URL https://github.com/google/googletest/archive/e2239ee6043f73722e7aa812a459f54a28552929.zip
-#)
-#set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-#FetchContent_MakeAvailable(googletest)
-#
-#enable_testing()
-#
-#get_filename_component(TEST_BOUNDS_FILE_PATH test/resources/test_bounds.cl ABSOLUTE)
-#get_filename_component(TEST_RESTRICT_FILE_PATH test/resources/test_restrict.cl ABSOLUTE)
-#get_filename_component(TEST_ONE_DNN_FILE_PATH test/resources/test_one_dnn.cl ABSOLUTE)
-#get_filename_component(TEST_PIPE_CNN_FILE_PATH test/resources/test_pipe_cnn.cl ABSOLUTE)
-#get_filename_component(TEST_RACES_FAIL_FILE_PATH test/resources/races/fail/test_races.cl ABSOLUTE)
-#get_filename_component(TEST_RACES_PASS_FILE_PATH test/resources/races/pass/test_races.cl ABSOLUTE)
-#configure_file(test/test_resources.h.in test_resources.h)
-#include_directories(${CMAKE_CURRENT_BINARY_DIR})
-#
-#add_executable(tests ${LIB_SRCS} ${TEST_RESOURCES}
-#        test/test_utils.h test/test_utils.cpp
-#        test/test_bounds.cpp
-#        test/test_restrict.cpp
-#        test/test_races.cpp
-#)
-#target_link_libraries(tests PRIVATE ${LIBS} gtest_main)
-#
-#include(GoogleTest)
-#gtest_discover_tests(tests)
+include(FetchContent)
+FetchContent_Declare(
+    googletest
+    URL https://github.com/google/googletest/archive/e2239ee6043f73722e7aa812a459f54a28552929.zip
+)
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+
+enable_testing()
+
+get_filename_component(TEST_BOUNDS_FILE_PATH test/resources/test_bounds.cl ABSOLUTE)
+get_filename_component(TEST_RESTRICT_FILE_PATH test/resources/test_restrict.cl ABSOLUTE)
+get_filename_component(TEST_ONE_DNN_FILE_PATH test/resources/test_one_dnn.cl ABSOLUTE)
+get_filename_component(TEST_PIPE_CNN_FILE_PATH test/resources/test_pipe_cnn.cl ABSOLUTE)
+get_filename_component(TEST_RACES_FAIL_FILE_PATH test/resources/races/fail/test_races.cl ABSOLUTE)
+get_filename_component(TEST_RACES_PASS_FILE_PATH test/resources/races/pass/test_races.cl ABSOLUTE)
+configure_file(test/test_resources.h.in test_resources.h)
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
+
+add_executable(tests ${LIB_SRCS} ${TEST_RESOURCES}
+        test/test_utils.h test/test_utils.cpp
+        test/test_bounds.cpp
+        test/test_restrict.cpp
+        test/test_races.cpp
+)
+target_link_libraries(tests PRIVATE ${LIBS} gtest_main)
+
+include(GoogleTest)
+gtest_discover_tests(tests)

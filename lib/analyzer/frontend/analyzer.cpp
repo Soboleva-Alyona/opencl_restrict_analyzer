@@ -30,8 +30,12 @@ clsa::analyzer::analyzer(std::string_view filename) : compiler_instance() {
     auto& source_manager = compiler_instance.getSourceManager();
 
     auto& header_search_opts = compiler_instance.getHeaderSearchOpts();
-    // TODO: adjust header_search_opts?
-    //header_search_opts.AddPath("/Library/Developer/CommandLineTools/usr/lib/clang/12.0.0/include/", clang::frontend::IncludeDirGroup::Angled, false, false);
+    header_search_opts.AddPath(
+        "/usr/lib/llvm-12/lib/clang/12.0.1/include/",
+        clang::frontend::IncludeDirGroup::Quoted,
+        false,
+        false
+    );
 
     auto& lang_opts = compiler_instance.getLangOpts();
     lang_opts.IncludeDefaultHeader = 1;
@@ -46,7 +50,7 @@ void clsa::analyzer::set_violation_handler(std::function<void(const clang::ASTCo
     violation_handler = std::move(handler);
 }
 
-void clsa::analyzer::analyze(std::uint32_t checks, std::string_view kernel_name, std::uint32_t work_dim,
+void clsa::analyzer::analyze(std::set<uint32_t> *checks, std::string_view kernel_name, std::uint32_t work_dim,
                              const std::size_t* global_work_size, const std::size_t* local_work_size,
                              std::size_t args_count, const std::size_t* arg_sizes, void** arg_values,
                              const clsa::analyzer_options& options) {
@@ -74,13 +78,13 @@ void clsa::analyzer::analyze(std::uint32_t checks, std::string_view kernel_name,
                     violation_handler(ctx.ast, violation);
                 }
             });
-            if (checks & checks::bounds) {
+            if (checks->contains(clsa::analyzer::checks::bounds)) {
                 consumer.add_checker(std::make_unique<clsa::bounds_checker>(ctx));
             }
-            if (checks & checks::restrict) {
+            if (checks->contains(clsa::analyzer::checks::restrict)) {
                 consumer.add_checker(std::make_unique<clsa::restrict_checker>(ctx));
             }
-            if (checks & checks::race) {
+            if (checks->contains(clsa::analyzer::checks::race)) {
                 consumer.add_checker(std::make_unique<clsa::race_checker>(ctx));
             }
         }));

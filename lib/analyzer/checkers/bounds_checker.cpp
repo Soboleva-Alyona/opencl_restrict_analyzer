@@ -6,7 +6,9 @@ std::optional<clsa::violation> clsa::bounds_checker::check_memory_access(const c
                                                                          const clang::Expr* const expr,
                                                                          const clsa::memory_access_type access_type,
                                                                          const z3::expr& address,
-                                                                         const clsa::optional_value& value) {
+                                                                         const clsa::optional_value& value,
+                                                                         const clsa::optional_value& value_copy,
+                                                                         const z3::expr& address_copy) {
     const clsa::variable* var = block->var_get(get_pointer_decl(expr));
     if (nullptr == var) {
         return std::nullopt;

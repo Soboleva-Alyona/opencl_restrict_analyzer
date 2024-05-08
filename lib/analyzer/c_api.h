@@ -43,7 +43,7 @@ typedef struct {
 } clsa_violation;
 
 CLSA_CAPI_EXPORT extern clsa_violation* clsa_analyze(
-    uint32_t checks, const char* filename, const char* kernel_name,
+    std::set<uint32_t>* checks, const char* filename, const char* kernel_name,
     uint32_t work_dim, const size_t* global_work_size, const size_t* local_work_size,
     size_t args_count, const std::size_t* arg_sizes, void** arg_values, size_t* violation_count);
 

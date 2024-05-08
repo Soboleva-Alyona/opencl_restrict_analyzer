@@ -23,7 +23,9 @@ namespace clsa {
         virtual std::optional<clsa::violation> check_memory_access(const clsa::block* block, const clang::Expr* expr,
                                                                    clsa::memory_access_type access_type,
                                                                    const z3::expr& address,
-                                                                   const clsa::optional_value& value) = 0;
+                                                                   const clsa::optional_value& value,
+                                                                   const clsa::optional_value& value_copy,
+                                                                   const z3::expr& address_copy) = 0;
 
     protected:
         z3::context& z3_ctx;
@@ -36,7 +38,7 @@ namespace clsa {
 
         [[nodiscard]] static const clang::ValueDecl* get_pointer_decl(const clang::Expr* expr);
 
-    private:
+    //private: //todo uncomment
         clsa::analyzer_context& ctx;
     };
 

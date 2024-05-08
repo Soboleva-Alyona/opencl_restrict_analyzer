@@ -25,7 +25,7 @@ namespace clsa {
 
         [[maybe_unused]] bool VisitFunctionDecl(clang::FunctionDecl* f);
 
-    private:
+    //private:
         bool process_stmt(clsa::block* block, const clang::Stmt* stmt, clsa::value_reference& ret_ref);
 
         bool process_compound_stmt(clsa::block* block, const clang::CompoundStmt* compound_stmt,
@@ -50,29 +50,32 @@ namespace clsa {
 
         clsa::optional_value transform_value_stmt(clsa::block* block, const clang::ValueStmt* value_stmt);
 
-        clsa::optional_value transform_expr(clsa::block* block, const clang::Expr* expr);
+        clsa::optional_value transform_expr(clsa::block* block, const clang::Expr* expr, bool copy_thread);
 
-        clsa::optional_value transform_cast_expr(clsa::block* block, const clang::CastExpr* cast_expr);
+        clsa::optional_value transform_cast_expr(clsa::block* block, const clang::CastExpr* cast_expr, bool copy_thread);
 
         clsa::optional_value transform_array_subscript_expr(clsa::block* block,
-                                                            const clang::ArraySubscriptExpr* array_subscript_expr);
+                                                            const clang::ArraySubscriptExpr* array_subscript_expr,
+                                                            bool copy_thread);
 
         clsa::optional_value transform_binary_operator(clsa::block* block,
-                                                       const clang::BinaryOperator* binary_operator);
+                                                       const clang::BinaryOperator* binary_operator,
+                                                       bool copy_thread);
 
-        clsa::optional_value transform_call_expr(clsa::block* block, const clang::CallExpr* call_expr);
+        clsa::optional_value transform_call_expr(clsa::block* block, const clang::CallExpr* call_expr, bool copy_thread);
 
-        clsa::optional_value transform_decl_ref_expr(clsa::block* block, const clang::DeclRefExpr* decl_ref_expr);
+        clsa::optional_value transform_decl_ref_expr(clsa::block* block, const clang::DeclRefExpr* decl_ref_expr, bool copy_thread);
 
-        clsa::optional_value transform_unary_operator(clsa::block* block, const clang::UnaryOperator* unary_operator);
+        clsa::optional_value transform_unary_operator(clsa::block* block, const clang::UnaryOperator* unary_operator, bool copy_thread);
 
         z3::expr unknown(const z3::sort& sort);
 
-        void assign(clsa::block* block, const clang::Expr* expr, const clsa::optional_value& value);
+        void assign(clsa::block* block, const clang::Expr* expr, const clsa::optional_value& value, const clsa::optional_value& value_copy, bool copy_thread);
 
         void check_memory_access(const clsa::block* block, const clang::Expr* expr,
                                  clsa::memory_access_type access_type, const z3::expr& address,
-                                 const clsa::optional_value& value);
+                                 const clsa::optional_value& value,
+                                 const clsa::optional_value& value_copy,const z3::expr& address_copy);
 
         clsa::optional_value get_dim_value(const std::vector<clsa::value_reference*>& values,
                                            const std::vector<clsa::optional_value>& args,
@@ -85,11 +88,15 @@ namespace clsa {
 
         clsa::optional_value handle_get_global_id(const std::vector<clsa::optional_value>& args);
 
+        clsa::optional_value handle_get_global_id_copy(const std::vector<clsa::optional_value>& args);
+
         clsa::optional_value handle_get_local_size(const std::vector<clsa::optional_value>& args);
 
         clsa::optional_value handle_get_enqueued_local_size(const std::vector<clsa::optional_value>& args);
 
         clsa::optional_value handle_get_local_id(const std::vector<clsa::optional_value>& args);
+
+        clsa::optional_value handle_get_local_id_copy(const std::vector<clsa::optional_value>& args);
 
         clsa::optional_value handle_get_num_groups(const std::vector<clsa::optional_value>& args);
 
@@ -115,6 +122,10 @@ namespace clsa {
         std::vector<clsa::value_reference*> group_nums = {};
         std::vector<clsa::value_reference*> group_ids = {};
         std::vector<clsa::value_reference*> global_offsets = {};
+
+        std::vector<clsa::value_reference*> global_ids_copy = {};
+        std::vector<clsa::value_reference*> local_ids_copy = {};
+
 
         std::vector<std::unique_ptr<clsa::abstract_checker>> checkers = {};
 

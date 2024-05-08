@@ -86,15 +86,15 @@ int main(int argc, const char** argv) {
         return 1;
     }
 
-    uint32_t analyzer_checks = 0;
+    std::set<uint32_t> analyzer_checks;
     if (checks.isSet(checks::bounds)) {
-        analyzer_checks |= clsa::analyzer::checks::bounds;
+        analyzer_checks.insert(clsa::analyzer::checks::bounds);
     }
     if (checks.isSet(checks::restrict)) {
-        analyzer_checks |= clsa::analyzer::checks::restrict;
+        analyzer_checks.insert(clsa::analyzer::checks::restrict);
     }
     if (checks.isSet(checks::race)) {
-        analyzer_checks |= clsa::analyzer::checks::race;
+        analyzer_checks.insert(clsa::analyzer::checks::race);
     }
 
     std::vector<std::size_t> global_sizes = global_work_size;
@@ -160,7 +160,7 @@ int main(int argc, const char** argv) {
             std::cout << "violation at " << violation.location.printToString(ctx.getSourceManager())
                       << ": " << violation.message;
         });
-        analyzer.analyze(analyzer_checks, kernel_name, work_dim, global_sizes.data(),
+        analyzer.analyze(&analyzer_checks, kernel_name, work_dim, global_sizes.data(),
             local_sizes.empty() ? nullptr : local_sizes.data(), arg_sizes.size(), arg_sizes.data(), arg_pure_ptrs.data());
     } catch (const std::exception& e) {
         std::cerr << "an error occurred during analysis: " << e.what() << std::endl;
