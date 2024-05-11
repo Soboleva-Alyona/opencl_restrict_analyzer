@@ -21,6 +21,18 @@ const z3::expr& clsa::optional_value::value() const {
     return _value.value();
 }
 
+clsa::optional_value clsa::optional_value::copy_value() const {
+    if (_value_copy.has_value())
+    {
+        return {_value_copy};
+    }
+    if (_value.has_value())
+    {
+        return {_value};
+    }
+    return{};
+}
+
 void clsa::optional_value::set_value(std::optional<z3::expr> value) {
     _value = std::move(value);
 }
@@ -50,3 +62,9 @@ void clsa::optional_value::set_metadata(const std::string& key, std::optional<z3
         _metadata.erase(key);
     }
 }
+
+void clsa::optional_value::set_value_copy(std::optional<z3::expr> value_copy)
+{
+    _value_copy = std::move(value_copy);
+}
+

@@ -2144,7 +2144,7 @@ __kernel void generic_reorder(__global float *restrict src,
         __global float *restrict dst, float alpha, float beta,
         __global float *restrict scales) {
 
-   // src += SRC_OFFSET0;
+    //src += SRC_OFFSET0;
     //dst += DST_OFFSET0;
 
 #define LOOP_NEST_LEVEL 4

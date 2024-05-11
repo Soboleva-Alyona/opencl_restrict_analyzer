@@ -50,27 +50,25 @@ namespace clsa {
 
         clsa::optional_value transform_value_stmt(clsa::block* block, const clang::ValueStmt* value_stmt);
 
-        clsa::optional_value transform_expr(clsa::block* block, const clang::Expr* expr, bool copy_thread);
+        clsa::optional_value transform_expr(clsa::block* block, const clang::Expr* expr);
 
-        clsa::optional_value transform_cast_expr(clsa::block* block, const clang::CastExpr* cast_expr, bool copy_thread);
+        clsa::optional_value transform_cast_expr(clsa::block* block, const clang::CastExpr* cast_expr);
 
         clsa::optional_value transform_array_subscript_expr(clsa::block* block,
-                                                            const clang::ArraySubscriptExpr* array_subscript_expr,
-                                                            bool copy_thread);
+                                                            const clang::ArraySubscriptExpr* array_subscript_expr);
 
         clsa::optional_value transform_binary_operator(clsa::block* block,
-                                                       const clang::BinaryOperator* binary_operator,
-                                                       bool copy_thread);
+                                                       const clang::BinaryOperator* binary_operator);
 
-        clsa::optional_value transform_call_expr(clsa::block* block, const clang::CallExpr* call_expr, bool copy_thread);
+        clsa::optional_value transform_call_expr(clsa::block* block, const clang::CallExpr* call_expr);
 
-        clsa::optional_value transform_decl_ref_expr(clsa::block* block, const clang::DeclRefExpr* decl_ref_expr, bool copy_thread);
+        clsa::optional_value transform_decl_ref_expr(clsa::block* block, const clang::DeclRefExpr* decl_ref_expr);
 
-        clsa::optional_value transform_unary_operator(clsa::block* block, const clang::UnaryOperator* unary_operator, bool copy_thread);
+        clsa::optional_value transform_unary_operator(clsa::block* block, const clang::UnaryOperator* unary_operator);
 
         z3::expr unknown(const z3::sort& sort);
 
-        void assign(clsa::block* block, const clang::Expr* expr, const clsa::optional_value& value, const clsa::optional_value& value_copy, bool copy_thread);
+        void assign(clsa::block* block, const clang::Expr* expr, const clsa::optional_value& value, const clsa::optional_value& value_copy);
 
         void check_memory_access(const clsa::block* block, const clang::Expr* expr,
                                  clsa::memory_access_type access_type, const z3::expr& address,
@@ -107,6 +105,13 @@ namespace clsa {
         clsa::optional_value handle_get_global_linear_id(const std::vector<clsa::optional_value>& args);
 
         clsa::optional_value handle_get_local_linear_id(const std::vector<clsa::optional_value>& args);
+
+        clsa::optional_value handle_barrier(const std::vector<clsa::optional_value>& args);
+
+        void handle_local_barrier();
+
+        void handle_global_barrier();
+
         // builtin handlers
 
         clsa::analyzer_context& ctx;

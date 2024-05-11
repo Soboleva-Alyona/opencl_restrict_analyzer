@@ -16,15 +16,20 @@ namespace clsa {
                                                            const clsa::optional_value& value,
                                                            const clsa::optional_value& value_copy, const z3::expr& address_copy) override;
 
+        void sync_local_memory();
+
+        void sync_global_memory();
+
     private:
-        struct memory_access_data {
+        struct memory_access_data_race_condition {
             const clang::Expr* const expr;
             const clsa::memory_access_type access_type;
             const z3::expr address;
             const clsa::variable* const var;
+            const z3::expr address_copy;
         };
 
-        static const char* get_access_name(const memory_access_data& access);
+        static const char* get_access_name(const memory_access_data_race_condition& access);
 
         std::optional<clsa::violation> check_inside_of_warp(const clsa::block * block,
                                                             const clang::Expr * expr,
@@ -32,9 +37,13 @@ namespace clsa {
                                                             const z3::expr &address,
                                                             const clsa::optional_value& value,
                                                             const clsa::optional_value& value_copy, const z3::expr& address_copy);
+        void fill_accesses(clsa::memory_access_type access_type, memory_access_data_race_condition access, const bool& is_global_space_mem);
 
-        std::unordered_map<const clsa::block*, std::vector<memory_access_data>> accesses = {};
-        std::unordered_map<const clsa::block*, std::vector<memory_access_data>> writes = {};
+        std::vector<memory_access_data_race_condition> local_memory_accesses = {};
+        std::vector<memory_access_data_race_condition> local_writes = {};
+
+        std::vector<memory_access_data_race_condition> global_memory_accesses = {};
+        std::vector<memory_access_data_race_condition> global_writes = {};
     };
 }
 

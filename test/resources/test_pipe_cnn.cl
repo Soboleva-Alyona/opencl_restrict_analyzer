@@ -1252,7 +1252,7 @@ void lrn(
 		convert_ptr = (int*) (&lrn_reg2);
 		// substract the bias 127 to get exponent
 		expo = (EXP_MASK & (*convert_ptr >> MAN_BITS)) - 127;
-		manti = ((*convert_ptr) & MAN_MASK); //does not include the implicit 1
+		// manti = ((*convert_ptr) & MAN_MASK); //does not include the implicit 1 // todo uncomment
 
 		// Get level-1 table item (segment) index from exponent
 		addr_1 = ((expo-EXP_STEP_MIN)>>EXP_STEP_LOG)<<MAN_INDEX_BITS;
@@ -1287,7 +1287,7 @@ void lrn(
 	for(unsigned char vv=0; vv<VEC_SIZE; vv++){
 		data_out_partial.data[vv]=lrn_buffer[global_z*VEC_SIZE+vv];
 	}
-	top[global_z*data_dim2*data_dim1 + global_y*data_dim1 + global_x] = data_out_partial;
+	//top[global_z*data_dim2*data_dim1 + global_y*data_dim1 + global_x] = data_out_partial;
 
 	#ifdef DEBUG_LRN_OUT
 	if(global_z==0&&global_x==0&&global_y==0)

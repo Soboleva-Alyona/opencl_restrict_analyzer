@@ -26,6 +26,8 @@ namespace clsa {
 
         [[nodiscard]] const z3::expr& value() const;
 
+        [[nodiscard]] optional_value copy_value() const;
+
         void set_value(std::optional<z3::expr> value);
 
         clsa::optional_value map_value(const std::function<std::optional<z3::expr>(z3::expr)>& mapper) const;
@@ -36,8 +38,11 @@ namespace clsa {
 
         void set_metadata(const std::string& key, std::optional<z3::expr> value);
 
+        void set_value_copy(std::optional<z3::expr> value_copy);
+
     private:
         std::optional<z3::expr> _value;
+        std::optional<z3::expr> _value_copy;
         std::unordered_map<std::string, z3::expr> _metadata;
     };
 
