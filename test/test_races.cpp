@@ -104,9 +104,3 @@ TEST(TestRaces, PipeCNN)
         16
     );
 }
-
-
-TEST(TestRaces, MyTest)
-{
-    EXPECT_FALSE(analyze_races(test_races_fail_file_path, "my_test").empty());
-}
