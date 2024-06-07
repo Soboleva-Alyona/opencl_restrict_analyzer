@@ -108,9 +108,15 @@ namespace clsa {
 
         clsa::optional_value handle_barrier(const std::vector<clsa::optional_value>& args);
 
+        clsa::optional_value handle_image_read(const std::vector<clsa::optional_value>& args);
+
+        clsa::optional_value handle_image_write(const std::vector<clsa::optional_value>& args);
+
         void handle_local_barrier();
 
         void handle_global_barrier();
+
+        void handle_image_barrier();
 
         // builtin handlers
 

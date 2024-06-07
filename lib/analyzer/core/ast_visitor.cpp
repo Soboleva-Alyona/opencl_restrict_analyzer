@@ -16,6 +16,7 @@
 
 #define CLK_LOCAL_MEM_FENCE_VALUE 1
 #define CLK_GLOBAL_MEM_FENCE_VALUE 2
+#define CLK_IMAGE_MEM_FENCE_VALUE 3
 
 namespace {
     z3::expr to_bool(z3::context& ctx, const z3::expr& expr) {
@@ -225,10 +226,10 @@ bool clsa::ast_visitor::VisitFunctionDecl(clang::FunctionDecl* f) {
 // https://clang.llvm.org/doxygen/classclang_1_1Stmt.html
 bool clsa::ast_visitor::process_stmt(clsa::block* block, const clang::Stmt* stmt, clsa::value_reference& ret_ref) {
     // todo: remove (for debug)
-    // std::string str;
-    // llvm::raw_string_ostream rso(str);
-    // stmt->dump(rso, ctx.ast);
-    // std::cout << "llvm dump: "<< str;
+    std::string str;
+    llvm::raw_string_ostream rso(str);
+    stmt->dump(rso, ctx.ast);
+    std::cout << "llvm dump: "<< str;
     if (clang::isa<clang::CompoundStmt>(stmt)) {
         return process_compound_stmt(block, clang::cast<clang::CompoundStmt>(stmt), ret_ref);
     } else if (clang::isa<clang::WhileStmt>(stmt)) {
@@ -573,7 +574,6 @@ clsa::optional_value clsa::ast_visitor::transform_binary_operator(clsa::block* b
 
 clsa::optional_value clsa::ast_visitor::transform_call_expr(clsa::block* block, const clang::CallExpr* call_expr) {
     static std::unordered_map<std::string, clsa::optional_value (clsa::ast_visitor::*)(
-        // todo refactor (merge)
         const std::vector<clsa::optional_value>&)> builtin_handlers = {
         {"get_work_dim",            &clsa::ast_visitor::handle_get_work_dim},
         {"get_global_size",         &clsa::ast_visitor::handle_get_global_size},
@@ -598,6 +598,13 @@ clsa::optional_value clsa::ast_visitor::transform_call_expr(clsa::block* block, 
         const std::vector<clsa::optional_value>&)> barrier_builtin_handlers = {
         {"barrier",           &clsa::ast_visitor::handle_barrier}
     };
+    static std::unordered_map<std::string, clsa::optional_value (clsa::ast_visitor::*)(
+        const std::vector<clsa::optional_value>&)> image_access_builtin_handlers = {
+        {"read_imagef",           &clsa::ast_visitor::handle_image_read},
+        {"read_imagei",           &clsa::ast_visitor::handle_image_read},
+        {"write_imagef",           &clsa::ast_visitor::handle_image_write},
+        {"write_imagei",           &clsa::ast_visitor::handle_image_write}
+    };
     const clang::Decl* callee_decl = call_expr->getCalleeDecl();
     std::vector<clsa::optional_value> args;
     std::transform(call_expr->getArgs(), call_expr->getArgs() + call_expr->getNumArgs(),
@@ -616,6 +623,11 @@ clsa::optional_value clsa::ast_visitor::transform_call_expr(clsa::block* block, 
             return result_value;
         }
         if (auto it = barrier_builtin_handlers.find(name); it != barrier_builtin_handlers.end())
+        {
+            return (this->*it->second)(args);
+        }
+
+        if (auto it = image_access_builtin_handlers.find(name); it != image_access_builtin_handlers.end())
         {
             return (this->*it->second)(args);
         }
@@ -867,15 +879,27 @@ clsa::optional_value clsa::ast_visitor::handle_barrier(const std::vector<clsa::o
         else if (cl_mem_fence_flag_value == CLK_GLOBAL_MEM_FENCE_VALUE)
         {
             handle_global_barrier();
+        } else if (cl_mem_fence_flag_value == CLK_IMAGE_MEM_FENCE_VALUE)
+        {
+            handle_image_barrier();
         }
     }
+    return {};
+}
 
+clsa::optional_value clsa::ast_visitor::handle_image_read(const std::vector<clsa::optional_value>& args)
+{
+    return {};
+}
+
+clsa::optional_value clsa::ast_visitor::handle_image_write(const std::vector<clsa::optional_value>& args)
+{
     return {};
 }
 
 void clsa::ast_visitor::handle_local_barrier() {
     for (auto& checker : checkers) {
-        if (race_checker* race_checker_ = dynamic_cast<race_checker*>(checker.get()); race_checker_ != nullptr)
+        if (auto* race_checker_ = dynamic_cast<race_checker*>(checker.get()); race_checker_ != nullptr)
         {
             race_checker_->sync_local_memory();
         }
@@ -884,9 +908,18 @@ void clsa::ast_visitor::handle_local_barrier() {
 
 void clsa::ast_visitor::handle_global_barrier() {
     for (auto& checker : checkers) {
-        if (race_checker* race_checker_ = dynamic_cast<race_checker*>(checker.get()); race_checker_ != nullptr)
+        if (auto* race_checker_ = dynamic_cast<race_checker*>(checker.get()); race_checker_ != nullptr)
         {
             race_checker_->sync_global_memory();
+        }
+    }
+}
+
+void clsa::ast_visitor::handle_image_barrier() {
+    for (auto& checker : checkers) {
+        if (auto* race_checker_ = dynamic_cast<race_checker*>(checker.get()); race_checker_ != nullptr)
+        {
+            race_checker_->sync_image_memory();
         }
     }
 }

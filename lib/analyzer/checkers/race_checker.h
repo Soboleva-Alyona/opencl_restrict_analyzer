@@ -20,6 +20,8 @@ namespace clsa {
 
         void sync_global_memory();
 
+        void sync_image_memory();
+
     private:
         struct memory_access_data_race_condition {
             const clang::Expr* const expr;

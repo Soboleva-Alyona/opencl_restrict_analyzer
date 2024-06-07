@@ -81,16 +81,15 @@ std::optional<clsa::violation> clsa::race_checker::check_inside_of_warp(const cl
 
     if (clang::isa<clang::ArraySubscriptExpr>(expr))
     {
-        std::ostringstream message;
-        message << "Possible write/write race discovered through the access to array`" << var->decl->getName().str()
-                << "` at " << expr->getExprLoc().printToString(get_source_manager()) << std::endl;
-
         z3::expr race_condition = address_copy == address;
         if (value.has_value() && value_copy.has_value())
         {
             race_condition = z3::ite(race_condition,
                                      race_condition && (value.value() != value_copy.value()), race_condition);
         }
+        std::ostringstream message;
+        message << "Possible write/write race discovered through the access to array`" << var->decl->getName().str()
+            << "` at " << expr->getExprLoc().printToString(get_source_manager()) << std::endl;
 
         if (const std::optional<z3::model> result = check(block, race_condition); result.has_value())
         {
@@ -134,21 +133,15 @@ std::optional<clsa::violation> clsa::race_checker::check_memory_access(const cls
                                                                        const clsa::optional_value& value,
                                                                        const clsa::optional_value& value_copy,
                                                                        const z3::expr& address_copy) {
-    // private memory is only visible to a worker, constant is read-only => no write-write races inside of warp
+    // private memory is only visible to a worker, constant is read-only => no races
     if (is_memory_private_or_constant(expr))
     {
         return std::nullopt;
     }
-    // inside of warp
+    // check race condition inside of warp
     std::optional<violation> warp_race_violation = check_inside_of_warp(block, expr, access_type, address, value, value_copy, address_copy);
-    if (warp_race_violation != std::nullopt)
-    {
-        // todo - don't return (merge them, otherwise writes/accesses will not be kept if we want to give information about
-        // few races at one execution)
-        return warp_race_violation;
-    }
 
-    // inside of a workgroup
+    // check race condition inside of a workgroup
     const clang::ValueDecl* value_decl = get_pointer_decl(expr);
     const clsa::variable* var = block->var_get(value_decl);
     if (nullptr == var) {
@@ -159,8 +152,6 @@ std::optional<clsa::violation> clsa::race_checker::check_memory_access(const cls
     };
 
     const bool is_global_space_mem = is_memory_global(expr);
-
-    // std::vector<memory_access_data_race_condition> other_accesses;
     auto& other_accesses = access_type == clsa::read
                                ? (is_global_space_mem ? global_writes : local_writes)
                                : is_global_space_mem ? global_memory_accesses : local_memory_accesses;
@@ -174,15 +165,22 @@ std::optional<clsa::violation> clsa::race_checker::check_memory_access(const cls
 
         race_condition = z3::ite(address == other_address_copy || address_copy == other_address,
             violation_access_idx == z3_ctx.int_val(uint64_t(other_accesses.size())), race_condition);
+    }
 
+    if (warp_race_violation != std::nullopt)
+    {
+        return warp_race_violation;
     }
     if (const std::optional<z3::model> result = check(block, race_condition); result.has_value())
     {
         const std::int64_t id = result.value().eval(violation_access_idx).get_numeral_int64();
         if (id != 0)
         {
+            const auto&  other_access = other_accesses[id - 1];
             std::ostringstream message;
-            message << "Possible write/write race inside workgroup discovered through access to `" << var->decl->getName().str()
+            message << "Possible " << (access_type == clsa::read ? "read" : "write")
+                    << "/" << (other_access.access_type == clsa::read ? "read" : "write")
+                    << " race inside workgroup discovered through access to `" << var->decl->getName().str()
                     << "` at " << expr->getExprLoc().printToString(get_source_manager()) << std::endl;
 
             return clsa::violation {
@@ -207,5 +205,11 @@ void clsa::race_checker::sync_local_memory()
 {
     local_memory_accesses.clear();
     local_writes.clear();
+}
+
+void clsa::race_checker::sync_image_memory()
+{
+    global_memory_accesses.clear();
+    global_writes.clear();
 }
 
