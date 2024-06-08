@@ -4,7 +4,9 @@
 namespace clsa {
     enum memory_access_type {
         read,
-        write
+        write,
+        read_image,
+        write_image
     };
 }
 

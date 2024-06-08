@@ -39,13 +39,16 @@ namespace clsa {
                                                             const z3::expr &address,
                                                             const clsa::optional_value& value,
                                                             const clsa::optional_value& value_copy, const z3::expr& address_copy);
-        void fill_accesses(clsa::memory_access_type access_type, memory_access_data_race_condition access, const bool& is_global_space_mem);
+        void fill_accesses(clsa::memory_access_type access_type, const memory_access_data_race_condition& access, const bool& is_global_space_mem);
 
         std::vector<memory_access_data_race_condition> local_memory_accesses = {};
         std::vector<memory_access_data_race_condition> local_writes = {};
 
         std::vector<memory_access_data_race_condition> global_memory_accesses = {};
         std::vector<memory_access_data_race_condition> global_writes = {};
+
+        std::vector<memory_access_data_race_condition> image_memory_accesses = {};
+        std::vector<memory_access_data_race_condition> image_memory_writes = {};
     };
 }
 

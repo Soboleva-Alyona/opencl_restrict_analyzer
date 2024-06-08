@@ -7,16 +7,18 @@
 
 namespace {
 
-    const std::string global_memory_qualifier = "__global";
-    const std::string local_memory_qualifier = "__local";
+    const std::string global_memory_qualifier = "global";
+    const std::string local_memory_qualifier = "local";
+    const std::string read_only_memory_qualifier = "read_only";
 
-    bool is_memory_private_or_constant(const clang::Expr *const expr)
+    bool is_memory_private_or_readonly(const clang::Expr *const expr)
     {
         const auto type = expr->getType();
         if (type.getUnqualifiedType().getAsString().find(global_memory_qualifier) == std::string::npos
             && type.getUnqualifiedType().getAsString().find(local_memory_qualifier) == std::string::npos
             && type.getQualifiers().getAsString().find(global_memory_qualifier) == std::string::npos
-            && type.getQualifiers().getAsString().find(local_memory_qualifier) == std::string::npos)
+            && type.getQualifiers().getAsString().find(local_memory_qualifier) == std::string::npos
+            && type.getQualifiers().getAsString().find(read_only_memory_qualifier) == std::string::npos)
        {
             return true;
         }
@@ -31,12 +33,6 @@ namespace {
        {
             return true;
         }
-        return false;
-    }
-
-    bool do_workers_intersect_for_array_access()
-    {
-
         return false;
     }
 
@@ -55,7 +51,7 @@ std::optional<clsa::violation> clsa::race_checker::check_inside_of_warp(const cl
     }
 
     // check lhs
-    // if similar for all threads - it's race
+    // if similar for all threads (but rhs can be different for two different threads) - it's race
     //          1) arraySubExps - index is integer literal or some combination of local_id functions (a[get_local_id(0)] = 0)
     //          2) any variable (consider it's __local or __global)
 
@@ -105,7 +101,7 @@ std::optional<clsa::violation> clsa::race_checker::check_inside_of_warp(const cl
 }
 
 
-void clsa::race_checker::fill_accesses(const clsa::memory_access_type access_type, const clsa::race_checker::memory_access_data_race_condition access, const bool& is_global_space_mem)
+void clsa::race_checker::fill_accesses(const clsa::memory_access_type access_type, const clsa::race_checker::memory_access_data_race_condition& access, const bool& is_global_space_mem)
 {
     if (is_global_space_mem)
     {
@@ -114,7 +110,6 @@ void clsa::race_checker::fill_accesses(const clsa::memory_access_type access_typ
     {
         local_memory_accesses.emplace_back(access);
     }
-
     if (access_type == clsa::write) {
         if (is_global_space_mem)
         {
@@ -123,6 +118,13 @@ void clsa::race_checker::fill_accesses(const clsa::memory_access_type access_typ
         {
             local_writes.emplace_back(access);
         }
+    }
+    if (access_type == clsa::read_image)
+    {
+        image_memory_accesses.emplace_back(access);
+    } else if (access_type == clsa::write_image)
+    {
+        image_memory_writes.emplace_back(access);
     }
 }
 
@@ -134,7 +136,7 @@ std::optional<clsa::violation> clsa::race_checker::check_memory_access(const cls
                                                                        const clsa::optional_value& value_copy,
                                                                        const z3::expr& address_copy) {
     // private memory is only visible to a worker, constant is read-only => no races
-    if (is_memory_private_or_constant(expr))
+    if (is_memory_private_or_readonly(expr))
     {
         return std::nullopt;
     }
@@ -145,16 +147,18 @@ std::optional<clsa::violation> clsa::race_checker::check_memory_access(const cls
     const clang::ValueDecl* value_decl = get_pointer_decl(expr);
     const clsa::variable* var = block->var_get(value_decl);
     if (nullptr == var) {
-        return std::nullopt;
+        return warp_race_violation;
     }
     const auto access = memory_access_data_race_condition {
         expr, access_type, address, var, address_copy
     };
 
     const bool is_global_space_mem = is_memory_global(expr);
-    auto& other_accesses = access_type == clsa::read
-                               ? (is_global_space_mem ? global_writes : local_writes)
-                               : is_global_space_mem ? global_memory_accesses : local_memory_accesses;
+    auto& other_accesses =
+        access_type == clsa::read_image ? image_memory_writes
+            : access_type == clsa::write_image ? image_memory_accesses
+            : access_type == clsa::read ? (is_global_space_mem ? global_writes : local_writes)
+            : is_global_space_mem ? global_memory_accesses : local_memory_accesses;
 
     z3::expr violation_access_idx = z3_ctx.int_const("IDX");
     z3::expr race_condition = violation_access_idx == 0;
@@ -209,7 +213,6 @@ void clsa::race_checker::sync_local_memory()
 
 void clsa::race_checker::sync_image_memory()
 {
-    global_memory_accesses.clear();
-    global_writes.clear();
+    image_memory_accesses.clear();
 }
 

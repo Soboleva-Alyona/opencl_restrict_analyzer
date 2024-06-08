@@ -16,7 +16,7 @@
 
 #define CLK_LOCAL_MEM_FENCE_VALUE 1
 #define CLK_GLOBAL_MEM_FENCE_VALUE 2
-#define CLK_IMAGE_MEM_FENCE_VALUE 3
+#define CLK_IMAGE_MEM_FENCE_VALUE 4
 
 namespace {
     z3::expr to_bool(z3::context& ctx, const z3::expr& expr) {
@@ -599,11 +599,15 @@ clsa::optional_value clsa::ast_visitor::transform_call_expr(clsa::block* block, 
         {"barrier",           &clsa::ast_visitor::handle_barrier}
     };
     static std::unordered_map<std::string, clsa::optional_value (clsa::ast_visitor::*)(
-        const std::vector<clsa::optional_value>&)> image_access_builtin_handlers = {
-        {"read_imagef",           &clsa::ast_visitor::handle_image_read},
-        {"read_imagei",           &clsa::ast_visitor::handle_image_read},
+        clsa::block*, const clang::Expr*, const std::vector<clsa::optional_value>&)> image_access_builtin_handlers = {
+        {"read_imagef",            &clsa::ast_visitor::handle_image_read},
+        {"read_imagei",            &clsa::ast_visitor::handle_image_read},
+        {"read_imageh",            &clsa::ast_visitor::handle_image_read},
+        {"read_imageui",           &clsa::ast_visitor::handle_image_read},
         {"write_imagef",           &clsa::ast_visitor::handle_image_write},
-        {"write_imagei",           &clsa::ast_visitor::handle_image_write}
+        {"write_imagei",           &clsa::ast_visitor::handle_image_write},
+        {"write_imageh",           &clsa::ast_visitor::handle_image_write},
+        {"write_imageui",          &clsa::ast_visitor::handle_image_write}
     };
     const clang::Decl* callee_decl = call_expr->getCalleeDecl();
     std::vector<clsa::optional_value> args;
@@ -629,7 +633,7 @@ clsa::optional_value clsa::ast_visitor::transform_call_expr(clsa::block* block, 
 
         if (auto it = image_access_builtin_handlers.find(name); it != image_access_builtin_handlers.end())
         {
-            return (this->*it->second)(args);
+            return (this->*it->second)(block, call_expr, args);
         }
     }
     if (clang::isa<clang::FunctionDecl>(callee_decl) && callee_decl->hasBody()) {
@@ -871,29 +875,62 @@ clsa::optional_value clsa::ast_visitor::handle_barrier(const std::vector<clsa::o
 {
     if (!args.empty())
     {
-        int cl_mem_fence_flag_value = args[0].value().get_numeral_int();
-        if (cl_mem_fence_flag_value == CLK_LOCAL_MEM_FENCE_VALUE)
+        for (const auto & arg : args)
         {
-            handle_local_barrier();
-        }
-        else if (cl_mem_fence_flag_value == CLK_GLOBAL_MEM_FENCE_VALUE)
-        {
-            handle_global_barrier();
-        } else if (cl_mem_fence_flag_value == CLK_IMAGE_MEM_FENCE_VALUE)
-        {
-            handle_image_barrier();
+            switch (arg.value().get_numeral_int())
+            {
+                case CLK_LOCAL_MEM_FENCE_VALUE:
+                {
+                    handle_local_barrier();
+                    break;
+                }
+                case CLK_GLOBAL_MEM_FENCE_VALUE:
+                {
+                    handle_global_barrier();
+                    break;
+                }
+                case CLK_IMAGE_MEM_FENCE_VALUE:
+                {
+                    handle_image_barrier();
+                    break;
+                }
+                default:
+                    break;
+                }
         }
     }
     return {};
 }
 
-clsa::optional_value clsa::ast_visitor::handle_image_read(const std::vector<clsa::optional_value>& args)
+clsa::optional_value clsa::ast_visitor::handle_image_read(clsa::block* block,
+                                                            const clang::Expr* expr,
+                                                            const std::vector<clsa::optional_value>& args)
 {
+    for (auto& checker : checkers) {
+        if (auto* race_checker_ = dynamic_cast<race_checker*>(checker.get()); race_checker_ != nullptr)
+        {
+            auto image_access_address = args[0].value() + args[2].value(); // todo: fix
+            auto image_access_address_copy = args[0].value() + args[2].copy_value().value();
+            race_checker_->check_memory_access(block, expr, clsa::read_image, image_access_address, {}, {}, image_access_address_copy);
+        }
+    }
     return {};
 }
 
-clsa::optional_value clsa::ast_visitor::handle_image_write(const std::vector<clsa::optional_value>& args)
+clsa::optional_value clsa::ast_visitor::handle_image_write(clsa::block* block,
+                                                            const clang::Expr* expr,
+                                                            const std::vector<clsa::optional_value>& args)
 {
+    for (auto& checker : checkers) {
+        if (auto* race_checker_ = dynamic_cast<race_checker*>(checker.get()); race_checker_ != nullptr)
+        {
+            auto image_access_address = args[0].value() + args[1].value();
+            auto image_access_address_copy = args[0].value() + args[1].copy_value().value();
+            auto written_value = args[2].value();
+            auto written_value_copy = args[2].copy_value().value();
+            race_checker_->check_memory_access(block, expr, clsa::write_image, image_access_address, written_value, written_value_copy, image_access_address_copy);
+        }
+    }
     return {};
 }
 
