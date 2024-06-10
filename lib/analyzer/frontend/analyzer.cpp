@@ -52,8 +52,8 @@ void clsa::analyzer::set_violation_handler(std::function<void(const clang::ASTCo
 
 void clsa::analyzer::analyze(std::set<uint32_t> *checks, std::string_view kernel_name, std::uint32_t work_dim,
                              const std::size_t* global_work_size, const std::size_t* local_work_size,
-                             std::size_t args_count, const std::size_t* arg_sizes, void** arg_values,
-                             const clsa::analyzer_options& options) {
+                             std::uint32_t sub_group_size, std::size_t args_count, const std::size_t* arg_sizes,
+                             void** arg_values, const clsa::analyzer_options& options) {
     std::vector<std::pair<size_t, void*>> args;
     args.reserve(args_count);
     for (size_t i = 0; i < args_count; ++i) {
@@ -66,6 +66,7 @@ void clsa::analyzer::analyze(std::set<uint32_t> *checks, std::string_view kernel
         .global_work_size = std::vector(global_work_size, global_work_size + work_dim),
         .local_work_size = local_work_size == nullptr ? std::nullopt
             : std::make_optional<std::vector<size_t>>(local_work_size, local_work_size + work_dim),
+        .sub_group_size = sub_group_size,
         .options = options
     };
 

@@ -32,8 +32,8 @@ clsa_violation* clsa_analyze(std::set<uint32_t>* checks, const char* filename, c
             .message = strdup(violation.message.c_str())
         });
     });
-    analyzer.analyze(checks, kernel_name, work_dim, global_work_size, local_work_size, args_count, arg_sizes,
-        arg_values);
+    analyzer.analyze(checks, kernel_name, work_dim, global_work_size, local_work_size, 32, args_count,
+                     arg_sizes, arg_values);
     *violation_count = violations.size();
     auto* violations_data = (clsa_violation*) malloc(sizeof(clsa_violation) * violations.size());
     memcpy(violations_data, violations.data(), sizeof(clsa_violation) * violations.size());

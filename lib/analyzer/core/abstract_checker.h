@@ -38,7 +38,6 @@ namespace clsa {
 
         [[nodiscard]] static const clang::ValueDecl* get_pointer_decl(const clang::Expr* expr);
 
-    //private: //todo uncomment
         clsa::analyzer_context& ctx;
     };
 

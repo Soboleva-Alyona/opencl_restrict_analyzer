@@ -61,6 +61,24 @@ bool clsa::ast_visitor::VisitFunctionDecl(clang::FunctionDecl* f) {
     }
     clsa::block* kernel_block = global_block->make_inner();
 
+    const std::uint64_t sub_group_size_param = ctx.parameters.sub_group_size;
+
+    const auto& sub_group_size_value = global_block->value_decl("sub_group_size", ctx.z3.int_sort());
+    global_block->assume(sub_group_size_value->to_z3_expr() == ctx.z3.int_val(sub_group_size_param));
+    sub_group_size = sub_group_size_value;
+
+    const auto& sub_group_id = global_block->value_decl("sub_group_id", ctx.z3.int_sort());
+    global_block->assume(
+        sub_group_id->to_z3_expr() >= 0 && sub_group_id->to_z3_expr() < ctx.z3.int_val(sub_group_size_param));
+    sub_group_ids.push_back(sub_group_id);
+
+    const auto& sub_group_id_copy = global_block->value_decl("sub_group_id_copy", ctx.z3.int_sort());
+    global_block->assume(
+        sub_group_id_copy->to_z3_expr() >= 0 && sub_group_id_copy->to_z3_expr() < ctx.z3.int_val(sub_group_size_param));
+    sub_group_ids_copy.push_back(sub_group_id_copy);
+
+    global_block->assume(sub_group_id_copy->to_z3_expr() != sub_group_id->to_z3_expr());
+
     const bool is_local_size_specified = ctx.parameters.local_work_size.has_value();
     for (uint32_t i = 0; i < ctx.parameters.work_dim; ++i) {
         const std::function<std::string(std::string_view)> id = [id = std::to_string(i)](std::string_view name) {
@@ -205,6 +223,9 @@ bool clsa::ast_visitor::VisitFunctionDecl(clang::FunctionDecl* f) {
                     continue;
             }
             kernel_block->var_set(decl, value);
+        } else if (type->isImageType())
+        {
+            // todo: add image arguments handling
         }
     }
     process_stmt(kernel_block, f->getBody(), *global_block->value_decl("return", f->getReturnType()));
@@ -484,7 +505,8 @@ clsa::optional_value clsa::ast_visitor::transform_binary_operator(clsa::block* b
                 break;
             }
             case clang::BO_Add:
-            case clang::BO_AddAssign: {
+            case clang::BO_AddAssign:
+            case clang::BO_Or: {
                 value = lhs.value() + rhs.value();
                 value_copy = lhs_copy.value() + rhs_copy.value();
                 break;
@@ -596,7 +618,9 @@ clsa::optional_value clsa::ast_visitor::transform_call_expr(clsa::block* block, 
     };
     static std::unordered_map<std::string, clsa::optional_value (clsa::ast_visitor::*)(
         const std::vector<clsa::optional_value>&)> barrier_builtin_handlers = {
-        {"barrier",           &clsa::ast_visitor::handle_barrier}
+        {"barrier",                 &clsa::ast_visitor::handle_barrier},
+        {"work_group_barrier",      &clsa::ast_visitor::handle_barrier},
+        {"sub_group_barrier" ,      &clsa::ast_visitor::handle_barrier}
     };
     static std::unordered_map<std::string, clsa::optional_value (clsa::ast_visitor::*)(
         clsa::block*, const clang::Expr*, const std::vector<clsa::optional_value>&)> image_access_builtin_handlers = {
@@ -700,24 +724,20 @@ clsa::optional_value clsa::ast_visitor::transform_unary_operator(clsa::block* bl
             return to_numeral(ctx.z3, sub_expr_value);
         }
         case clang::UO_PostDec: {
-            // todo omplement value_copy
             assign(block, unary_operator->getSubExpr(), sub_expr.map_value([](auto value) { return value - 1; }), {});
             return sub_expr;
         }
         case clang::UO_PostInc: {
-            // todo omplement value_copy
             assign(block, unary_operator->getSubExpr(), sub_expr.map_value([](auto value) { return value + 1; }), {});
             return sub_expr;
         }
         case clang::UO_PreDec: {
             sub_expr.set_value(sub_expr.value() - 1);
-            // todo omplement value_copy
             assign(block, unary_operator->getSubExpr(), sub_expr, {});
             return sub_expr;
         }
         case clang::UO_PreInc: {
             sub_expr.set_value(sub_expr.value() + 1);
-            // todo omplement value_copy
             assign(block, unary_operator->getSubExpr(), sub_expr, {});
             return sub_expr;
         }
@@ -756,7 +776,6 @@ void clsa::ast_visitor::assign(clsa::block* block,
             if (!sub_expr.has_value()) {
                 return;
             }
-            // todo omplement value_copy
             check_memory_access(block, lhs, clsa::memory_access_type::write, sub_expr.value(), value, {}, z3::re_empty(ctx.z3.int_sort()));
             if (ctx.parameters.options.array_values && value.has_value()) {
                 block->write(sub_expr.value(), value.value());
@@ -875,28 +894,32 @@ clsa::optional_value clsa::ast_visitor::handle_barrier(const std::vector<clsa::o
 {
     if (!args.empty())
     {
-        for (const auto & arg : args)
+        if (args[0].has_value())
         {
-            switch (arg.value().get_numeral_int())
+            const auto string_representation = args[0].value().to_string();
+            for (auto & mem_fence_flag : string_representation)
             {
+                switch (mem_fence_flag)
+                {
                 case CLK_LOCAL_MEM_FENCE_VALUE:
-                {
-                    handle_local_barrier();
-                    break;
-                }
+                    {
+                        handle_local_barrier();
+                        break;
+                    }
                 case CLK_GLOBAL_MEM_FENCE_VALUE:
-                {
-                    handle_global_barrier();
-                    break;
-                }
+                    {
+                        handle_global_barrier();
+                        break;
+                    }
                 case CLK_IMAGE_MEM_FENCE_VALUE:
-                {
-                    handle_image_barrier();
-                    break;
-                }
+                    {
+                        handle_image_barrier();
+                        break;
+                    }
                 default:
                     break;
                 }
+            }
         }
     }
     return {};
@@ -909,7 +932,7 @@ clsa::optional_value clsa::ast_visitor::handle_image_read(clsa::block* block,
     for (auto& checker : checkers) {
         if (auto* race_checker_ = dynamic_cast<race_checker*>(checker.get()); race_checker_ != nullptr)
         {
-            auto image_access_address = args[0].value() + args[2].value(); // todo: fix
+            auto image_access_address = args[0].value() + args[2].value();
             auto image_access_address_copy = args[0].value() + args[2].copy_value().value();
             race_checker_->check_memory_access(block, expr, clsa::read_image, image_access_address, {}, {}, image_access_address_copy);
         }

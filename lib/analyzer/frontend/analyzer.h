@@ -26,8 +26,8 @@ namespace clsa {
         void set_violation_handler(std::function<void(const clang::ASTContext&, const clsa::violation&)> handler) noexcept;
 
         void analyze(std::set<uint32_t>* checks, std::string_view kernel_name, std::uint32_t work_dim,
-                     const std::size_t* global_work_size, const std::size_t* local_work_size, std::size_t args_count,
-                     const std::size_t* arg_sizes, void** arg_values, const clsa::analyzer_options& = {});
+                     const std::size_t* global_work_size, const std::size_t* local_work_size, std::uint32_t sub_group_size,
+                     std::size_t args_count, const std::size_t* arg_sizes, void** arg_values, const clsa::analyzer_options& = {});
 
     private:
         clang::CompilerInstance compiler_instance;

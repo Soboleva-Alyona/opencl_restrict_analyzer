@@ -19,6 +19,7 @@ namespace clsa {
         const std::optional<std::vector<std::size_t>> global_work_offset;
         const std::vector<std::size_t> global_work_size;
         const std::optional<std::vector<std::size_t>> local_work_size;
+        const std::uint32_t sub_group_size;
         const clsa::analyzer_options options;
     };
 

@@ -61,7 +61,7 @@ std::optional<clsa::violation> clsa::race_checker::check_inside_of_warp(const cl
     if (clang::isa<clang::DeclRefExpr>(expr))
     {
         std::ostringstream message;
-        message << "Possible write/write race discovered through access to variable`" << var->decl->getName().str()
+        message << "Possible write/write race inside of warp discovered through access to variable`" << var->decl->getName().str()
                 << "` at " << expr->getExprLoc().printToString(get_source_manager()) << std::endl;
 
         z3::expr different_values_written = value.value() != value_copy.value();
@@ -84,7 +84,7 @@ std::optional<clsa::violation> clsa::race_checker::check_inside_of_warp(const cl
                                      race_condition && (value.value() != value_copy.value()), race_condition);
         }
         std::ostringstream message;
-        message << "Possible write/write race discovered through the access to array`" << var->decl->getName().str()
+        message << "Possible write/write race inside of warp discovered through the access to array`" << var->decl->getName().str()
             << "` at " << expr->getExprLoc().printToString(get_source_manager()) << std::endl;
 
         if (const std::optional<z3::model> result = check(block, race_condition); result.has_value())
@@ -128,6 +128,15 @@ void clsa::race_checker::fill_accesses(const clsa::memory_access_type access_typ
     }
 }
 
+void clsa::race_checker::get_workgroup_race_message(const clang::Expr* const expr, const clsa::memory_access_type access_type, const clsa::variable* var, const std::vector<clsa::race_checker::memory_access_data_race_condition>::value_type& other_access, std::ostringstream& message)
+{
+    message << "Possible " << (access_type == clsa::read ? "read" : "write")
+        << "/" << (other_access.access_type == clsa::read ? "read" : "write")
+        << " race inside workgroup discovered through access to `" << var->decl->getName().str()
+        << "` at " << expr->getExprLoc().printToString(get_source_manager())
+        << " conflicting with " << other_access.expr->getExprLoc().printToString(get_source_manager()) << std::endl;
+}
+
 std::optional<clsa::violation> clsa::race_checker::check_memory_access(const clsa::block* const block,
                                                                        const clang::Expr* const expr,
                                                                        const clsa::memory_access_type access_type,
@@ -140,7 +149,7 @@ std::optional<clsa::violation> clsa::race_checker::check_memory_access(const cls
     {
         return std::nullopt;
     }
-    // check race condition inside of warp
+    // check race condition inside of a warp
     std::optional<violation> warp_race_violation = check_inside_of_warp(block, expr, access_type, address, value, value_copy, address_copy);
 
     // check race condition inside of a workgroup
@@ -182,10 +191,7 @@ std::optional<clsa::violation> clsa::race_checker::check_memory_access(const cls
         {
             const auto&  other_access = other_accesses[id - 1];
             std::ostringstream message;
-            message << "Possible " << (access_type == clsa::read ? "read" : "write")
-                    << "/" << (other_access.access_type == clsa::read ? "read" : "write")
-                    << " race inside workgroup discovered through access to `" << var->decl->getName().str()
-                    << "` at " << expr->getExprLoc().printToString(get_source_manager()) << std::endl;
+            get_workgroup_race_message(expr, access_type, var, other_access, message);
 
             return clsa::violation {
                 .location = expr->getExprLoc(),

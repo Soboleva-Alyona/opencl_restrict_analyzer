@@ -31,15 +31,22 @@ namespace clsa {
             const z3::expr address_copy;
         };
 
-        static const char* get_access_name(const memory_access_data_race_condition& access);
-
         std::optional<clsa::violation> check_inside_of_warp(const clsa::block * block,
                                                             const clang::Expr * expr,
                                                             clsa::memory_access_type access_type,
                                                             const z3::expr &address,
                                                             const clsa::optional_value& value,
                                                             const clsa::optional_value& value_copy, const z3::expr& address_copy);
-        void fill_accesses(clsa::memory_access_type access_type, const memory_access_data_race_condition& access, const bool& is_global_space_mem);
+
+        void fill_accesses(clsa::memory_access_type access_type,
+                           const memory_access_data_race_condition& access,
+                           const bool& is_global_space_mem);
+
+        void get_workgroup_race_message(const clang::Expr* expr,
+                                        clsa::memory_access_type access_type,
+                                        const clsa::variable* var,
+                                        const std::vector<clsa::race_checker::memory_access_data_race_condition>::value_type& other_access,
+                                        std::ostringstream& message);
 
         std::vector<memory_access_data_race_condition> local_memory_accesses = {};
         std::vector<memory_access_data_race_condition> local_writes = {};

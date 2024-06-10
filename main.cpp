@@ -102,6 +102,9 @@ int main(int argc, const char** argv) {
 
     std::regex buffer_regex("^b(\\d+)$");
     std::regex integer_regex("^(-?\\d+)((i|u)\\d+)?$");
+    std::regex one_dim_image_regex("^img(\\d+)$");
+    std::regex two_dim_image_regex("^img(\\d+)-(\\d+)$");
+    std::regex three_dim_image_regex("^img(\\d+)-(\\d+)-(\\d+)$");
 
     std::vector<std::unique_ptr<void, std::function<void(void*)>>> arg_ptrs;
     std::vector<size_t> arg_sizes;
@@ -111,7 +114,7 @@ int main(int argc, const char** argv) {
         if (arg == "unknown") {
             arg_ptrs.emplace_back(nullptr);
             arg_sizes.emplace_back(0);
-        } else if (std::regex_match(arg, match, buffer_regex)) {
+        } else if (std::regex_match(arg, match, buffer_regex) || std::regex_match(arg, match, one_dim_image_regex)) {
             arg_ptrs.emplace_back(new clsa::pseudocl_mem(clsa::pseudocl_create_buffer(std::stoull(match[1].str()))), [](void* ptr) {
                 clsa::pseudocl_release_mem_object(*(clsa::pseudocl_mem*) ptr);
                 delete (clsa::pseudocl_mem*) ptr;
@@ -143,6 +146,15 @@ int main(int argc, const char** argv) {
                 std::cerr << "invalid integer type: " << type << std::endl;
                 return 1;
             }
+        } else if (std::regex_match(arg, match, two_dim_image_regex)) {
+            // todo
+            arg_ptrs.emplace_back(new clsa::pseudocl_mem(clsa::pseudocl_create_buffer(std::stoull(match[1].str()))), [](void* ptr) {
+                clsa::pseudocl_release_mem_object(*(clsa::pseudocl_mem*) ptr);
+                delete (clsa::pseudocl_mem*) ptr;
+            });
+            arg_sizes.emplace_back(sizeof(clsa::pseudocl_mem));
+        } else if (std::regex_match(arg, match, three_dim_image_regex)) {
+            // todo
         } else {
             std::cerr << "invalid argument format: " << arg << std::endl;
             return 1;
@@ -161,7 +173,7 @@ int main(int argc, const char** argv) {
                       << ": " << violation.message;
         });
         analyzer.analyze(&analyzer_checks, kernel_name, work_dim, global_sizes.data(),
-            local_sizes.empty() ? nullptr : local_sizes.data(), arg_sizes.size(), arg_sizes.data(), arg_pure_ptrs.data());
+                         local_sizes.empty() ? nullptr : local_sizes.data(), 32, arg_sizes.size(), arg_sizes.data(), arg_pure_ptrs.data());
     } catch (const std::exception& e) {
         std::cerr << "an error occurred during analysis: " << e.what() << std::endl;
     }

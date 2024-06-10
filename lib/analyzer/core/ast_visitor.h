@@ -128,6 +128,7 @@ namespace clsa {
         std::vector<clsa::value_reference*> global_sizes = {};
         std::vector<clsa::value_reference*> global_ids = {};
         std::vector<clsa::value_reference*> local_sizes = {};
+        clsa::value_reference* sub_group_size;
         std::vector<clsa::value_reference*> enqueued_local_sizes = {};
         std::vector<clsa::value_reference*> local_ids = {};
         std::vector<clsa::value_reference*> group_nums = {};
@@ -136,6 +137,8 @@ namespace clsa {
 
         std::vector<clsa::value_reference*> global_ids_copy = {};
         std::vector<clsa::value_reference*> local_ids_copy = {};
+        std::vector<clsa::value_reference*> sub_group_ids = {};
+        std::vector<clsa::value_reference*> sub_group_ids_copy = {};
 
 
         std::vector<std::unique_ptr<clsa::abstract_checker>> checkers = {};
