@@ -607,7 +607,10 @@ clsa::optional_value clsa::ast_visitor::transform_call_expr(clsa::block* block, 
         {"get_group_id",            &clsa::ast_visitor::handle_get_group_id},
         {"get_global_offset",       &clsa::ast_visitor::handle_get_global_offset},
         {"get_global_linear_id",    &clsa::ast_visitor::handle_get_global_linear_id},
-        {"get_local_linear_id",     &clsa::ast_visitor::handle_get_local_linear_id},
+        {"get_sub_group_size",      &clsa::ast_visitor::handle_get_sub_group_size},
+        {"get_max_sub_group_size",  &clsa::ast_visitor::handle_get_max_sub_group_size},
+        {"get_sub_group_id",        &clsa::ast_visitor::handle_get_sub_group_id},
+
     };
     static std::unordered_map<std::string, clsa::optional_value (clsa::ast_visitor::*)(
         const std::vector<clsa::optional_value>&)> builtin_handlers_for_copy_thread = {
@@ -615,6 +618,8 @@ clsa::optional_value clsa::ast_visitor::transform_call_expr(clsa::block* block, 
         {"get_local_id",            &clsa::ast_visitor::handle_get_local_id_copy},
         {"get_global_linear_id",    &clsa::ast_visitor::handle_get_global_linear_id},
         {"get_local_linear_id",     &clsa::ast_visitor::handle_get_local_linear_id},
+        {"get_sub_group_id",        &clsa::ast_visitor::handle_get_sub_group_id_copy},
+
     };
     static std::unordered_map<std::string, clsa::optional_value (clsa::ast_visitor::*)(
         const std::vector<clsa::optional_value>&)> barrier_builtin_handlers = {
@@ -886,6 +891,52 @@ clsa::optional_value clsa::ast_visitor::handle_get_local_linear_id(const std::ve
     for (uint64_t i = 0; i < local_sizes.size(); ++i) {
         result = result + local_ids[i]->to_z3_expr() * size;
         size = size * local_sizes[i]->to_z3_expr();
+    }
+    return result;
+}
+
+clsa::optional_value clsa::ast_visitor::handle_get_sub_group_size(const std::vector<clsa::optional_value>& args) {
+    if (!args.empty() || sub_group_size == nullptr) {
+        return {};
+    }
+    z3::expr size = ctx.z3.int_val(1);
+    z3::expr result = ctx.z3.int_val(0);
+    result = sub_group_size->to_z3_expr();
+
+    return result;
+}
+
+clsa::optional_value clsa::ast_visitor::handle_get_max_sub_group_size(const std::vector<clsa::optional_value>& args) {
+    if (!args.empty() || sub_group_size == nullptr) {
+        return {};
+    }
+    z3::expr size = ctx.z3.int_val(1);
+    z3::expr result = ctx.z3.int_val(0);
+    result = sub_group_size->to_z3_expr();
+
+    return result;
+}
+
+clsa::optional_value clsa::ast_visitor::handle_get_sub_group_id(const std::vector<clsa::optional_value>& args) {
+    if (!args.empty() || sub_group_size == nullptr) {
+        return {};
+    }
+    z3::expr size = ctx.z3.int_val(1);
+    z3::expr result = ctx.z3.int_val(0);
+    for (uint64_t i = 0; i < sub_group_ids.size(); ++i) {
+        result = sub_group_ids[i]->to_z3_expr();
+    }
+    return result;
+}
+
+clsa::optional_value clsa::ast_visitor::handle_get_sub_group_id_copy(const std::vector<clsa::optional_value>& args) {
+    if (!args.empty() || sub_group_size == nullptr) {
+        return {};
+    }
+    z3::expr size = ctx.z3.int_val(1);
+    z3::expr result = ctx.z3.int_val(0);
+    for (uint64_t i = 0; i < sub_group_ids.size(); ++i) {
+        result = sub_group_ids[i]->to_z3_expr();
     }
     return result;
 }

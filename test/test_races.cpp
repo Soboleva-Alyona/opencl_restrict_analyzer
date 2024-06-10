@@ -105,6 +105,10 @@ TEST(TestRaces, test_no_barrier_for_local) {
     EXPECT_FALSE(analyze_races(test_races_fail_file_path, "test_no_barrier_for_local").empty());
 }
 
+TEST(TestRaces, test_index_mod_warp_size_minus_one) {
+    EXPECT_FALSE(analyze_races(test_races_path_file_path, "test_index_mod_warp_size_minus_one").empty());
+}
+
 TEST(TestRaces, test_race_one_instruction) {
     EXPECT_FALSE(analyze_races(test_races_fail_file_path, "test_race_one_instruction").empty());
 }

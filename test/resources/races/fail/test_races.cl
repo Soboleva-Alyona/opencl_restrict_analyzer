@@ -48,3 +48,7 @@ __kernel void test_no_barrier_for_local(__global int* a, __global int* b,  __glo
 __kernel void test_race_one_instruction(__global int* a, __global int* b, __global int* c) {
     a[get_local_id(0)] = a[(get_local_id(0) + 1) % get_local_size(0)];
 }
+
+__kernel void test_index_mod_warp_size_minus_one(__global int* a, __global int* b, __global int* c) {
+  a[(get_local_id(0) % 32) - 1] = get_local_id(0);
+}

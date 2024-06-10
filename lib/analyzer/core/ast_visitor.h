@@ -106,6 +106,14 @@ namespace clsa {
 
         clsa::optional_value handle_get_local_linear_id(const std::vector<clsa::optional_value>& args);
 
+        clsa::optional_value handle_get_sub_group_size(const std::vector<clsa::optional_value>& args);
+
+        clsa::optional_value handle_get_max_sub_group_size(const std::vector<clsa::optional_value>& args);
+
+        clsa::optional_value handle_get_sub_group_id(const std::vector<clsa::optional_value>& args);
+
+        clsa::optional_value handle_get_sub_group_id_copy(const std::vector<clsa::optional_value>& args);
+
         clsa::optional_value handle_barrier(const std::vector<clsa::optional_value>& args);
 
         clsa::optional_value handle_image_read(clsa::block* block, const clang::Expr* expr, const std::vector<clsa::optional_value>& args);
